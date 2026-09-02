@@ -437,8 +437,24 @@ const Store = {
   writeLocal(c,map){ try{ localStorage.setItem(this.key(c),JSON.stringify(map)); }catch(e){} },
 
   async init(){
-    let db=null;
-    try{ db = window.claude && claude.use ? await claude.use("db") : null; }catch(e){ db=null; }
+    let db=null, why="";
+    const t0 = (window.performance&&performance.now)?performance.now():Date.now();
+    const framed = (()=>{ try{ return window.top!==window.self; }catch(e){ return true; } })();
+    if(!window.claude) why="window.claude is absent \u2014 this page is not running inside a Claude viewer";
+    else if(typeof claude.use!=="function") why="window.claude exists but has no use() \u2014 an older or different viewer";
+    else {
+      try{ db = await claude.use("db");
+        if(!db) why="claude.use(db) resolved null \u2014 the viewer did not grant the shared database"; }
+      catch(e){ why="claude.use(db) threw: "+((e&&e.code)||(e&&e.message)||String(e)); }
+    }
+    const ms = Math.round(((window.performance&&performance.now)?performance.now():Date.now())-t0);
+    this.diag = {hasClaude:!!window.claude, hasUse:!!(window.claude&&typeof claude.use==="function"),
+      framed, host:(location.hostname||"(local file)"), protocol:location.protocol,
+      ms, db:!!db, why, checkedAt:new Date().toISOString()};
+    if(window.claude && typeof claude.use==="function"){
+      claude.use("sample").then(f=>{ this.diag.sample=!!f; }).catch(()=>{ this.diag.sample=false; });
+      claude.use("downloads").then(f=>{ this.diag.downloads=!!f; }).catch(()=>{ this.diag.downloads=false; });
+    }
     this.db = db; this.mode = db ? "live" : "local";
     if(db){
       /* onSnapshot delivers the current state right after registration and on
@@ -868,6 +884,34 @@ function viewCollabs(){
       tb))));
   return wrap;
 }
+async function retryConnect(){
+  toast("Reconnecting\u2026");
+  Store.ready=false;
+  await Store.init();
+  render();
+  toast(Store.mode==="live"?"Connected to the shared board":"Still not connected \u2014 see Setup for the details",Store.mode!=="live");
+}
+function diagPanel(){
+  const d=Store.diag||{};
+  const row=(k,v,tone)=>el("tr",{},el("td",{},k),
+    el("td",{},typeof v==="boolean"?pill(v?"yes":"no",v?"good":(tone||"crit")):el("span",{class:"mono"},String(v==null?"\u2014":v))));
+  return el("div",{class:"panel",style:"margin-bottom:16px"},
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},"Connection details"),
+      el("div",{class:"sub"},"What this page can see. Send a screenshot of this if it will not connect.")),
+      el("button",{class:"btn btn-sm",style:"margin-left:auto",onclick:retryConnect},"Retry connection")),
+    d.why?el("div",{class:"panel-b",style:"padding-bottom:0"},
+      el("div",{class:"callout crit"},el("b",{},"Why it is not connected: "),d.why)):null,
+    el("div",{class:"tw"},el("table",{},el("tbody",{},
+      row("Shared database",!!d.db),
+      row("AI screening",d.sample===undefined?"still checking":!!d.sample,"warn"),
+      row("File downloads",d.downloads===undefined?"still checking":!!d.downloads,"warn"),
+      row("window.claude present",!!d.hasClaude),
+      row("claude.use available",!!d.hasUse),
+      row("Running inside a frame",!!d.framed),
+      row("Page address",(d.protocol||"")+"//"+(d.host||"")),
+      row("Time to answer",(d.ms==null?"\u2014":d.ms)+" ms"),
+      row("Checked at",d.checkedAt?dmy(d.checkedAt)+" "+String(d.checkedAt).slice(11,19)+" UTC":"\u2014")))));
+}
 function localBanner(){
   return el("div",{class:"panel",style:"border-color:var(--warn);background:var(--warn-soft);margin-bottom:18px"},
     el("div",{class:"panel-b",style:"display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap"},
@@ -878,7 +922,10 @@ function localBanner(){
           "Anything you see or type here is stored in this browser only \u2014 your team cannot see it, and the real collabs, influencers and products are not loaded. Open the dashboard from ",
           el("b",{},"claude.ai"),
           " (the artifacts list, or the link that was shared with you) rather than a saved file or a direct page address.")),
-      el("button",{class:"btn btn-sm",onclick:clearLocal},"Clear this browser\u2019s data")));
+      el("div",{style:"display:flex;gap:8px;flex-wrap:wrap"},
+        el("button",{class:"btn btn-sm",onclick:retryConnect},"Retry connection"),
+        el("button",{class:"btn btn-sm",onclick:()=>go("setup")},"Why?"),
+        el("button",{class:"btn btn-sm",onclick:clearLocal},"Clear this browser\u2019s data"))));
 }
 async function clearLocal(){
   if(!confirm("Remove everything stored in this browser?\n\nThe shared board is not touched.")) return;
@@ -1321,6 +1368,7 @@ function viewSetup(){
   const s=S.settings, wrap=el("div",{});
   wrap.appendChild(el("div",{class:"view-head"},el("div",{},el("h1",{},"Setup"),
     el("p",{},"Set this once. Everything the Unicommerce bulk file writes comes from here."))));
+  wrap.appendChild(diagPanel());
 
   const save=()=>{Store.saveSettings();};
   wrap.appendChild(el("div",{class:"panel",style:"margin-bottom:16px"},
