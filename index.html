@@ -1060,7 +1060,6 @@ function viewPeople(){
 function viewProducts(){
   const wrap=el("div",{});
   const list0=Object.values(S.skus);
-  const noMrp=list0.filter(x=>!num(x.mrp)).length;
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Product master"),
       el("p",{},"The SKU codes exactly as they sit in Unicommerce. Marketing picks from this list, so no bulk upload ever fails on a typed SKU.")),
@@ -1072,9 +1071,6 @@ function viewProducts(){
     "Export the item master from Unicommerce and paste it in \u2014 the export's own columns are read automatically.",
     el("button",{class:"btn btn-p",style:"margin-top:14px",onclick:openSkuImport},"Paste SKU list")))); return wrap; }
 
-  if(noMrp) wrap.appendChild(el("div",{class:"callout warn"},
-    el("b",{},noMrp+" SKU"+(noMrp>1?"s have":" has")+" no MRP. "),
-    "The UC file writes Selling Price and Discount from MRP, so those lines go out at \u20b90 and the invoice carries no value. Add the MRPs before shipping."));
 
   const q=UI.q.toLowerCase();
   const list=list0.filter(x=>!q||[x.code,x.name,x.hsn,x.ean].join(" ").toLowerCase().includes(q))
@@ -1091,7 +1087,7 @@ function viewProducts(){
       el("td",{},el("button",{class:"linkish",onclick:()=>openSku(x.id)},x.name||x.code),
         x.sample?el("div",{style:"margin-top:4px"},el("span",{class:"tag"},"sample")):null),
       el("td",{class:"mono",style:"font-size:12px"},x.code),
-      el("td",{class:"num"},num(x.mrp)?inr(x.mrp):pill("no MRP","warn")),
+      el("td",{class:"num"},num(x.mrp)?inr(x.mrp):"—"),
       el("td",{class:"mono",style:"font-size:12px"},x.hsn||"\u2014"),
       el("td",{class:"mono",style:"font-size:12px"},x.ean||"\u2014"),
       el("td",{},x.active===false?pill("Inactive","neutral"):pill("Active","good")),
@@ -1741,8 +1737,8 @@ function openSku(id){
   api.body.appendChild(el("div",{class:"grid2"},
     field("SKU code",input(s.code,v=>{s.code=v.trim();}),{req:true,hint:"Copy-paste from UC — a typed code fails the upload."}),
     field("Product name",input(s.name,v=>{s.name=v;}),{req:true}),
-    field("MRP (₹)",input(s.mrp,v=>{s.mrp=num(v);},{type:"number",min:"0"}),
-      {hint:"Used as Selling Price and Discount in the UC file."}),
+    field("MRP (₹) — optional",input(s.mrp,v=>{s.mrp=num(v);},{type:"number",min:"0"}),
+      {hint:"Only fills Selling Price and Discount in the UC file. Leave it blank if you do not need it."}),
     field("Status",select(s.active===false?"0":"1",[["1","Active"],["0","Inactive"]],v=>{s.active=v==="1";})),
     field("HSN code",input(s.hsn,v=>{s.hsn=v.trim();})),
     field("EAN / barcode",input(s.ean,v=>{s.ean=v.trim();})),
@@ -1804,13 +1800,9 @@ function openSkuImport(){
     const known=Object.values(S.skus);
     const isNew=r=>!known.some(k=>String(k.code).toLowerCase()===String(r.code).toLowerCase());
     const fresh=parsed.rows.filter(isNew).length;
-    const noMrp=parsed.rows.filter(r=>!num(r.mrp)).length;
     preview.appendChild(el("div",{class:"callout"},
       el("b",{},parsed.rows.length+" rows read · "+fresh+" new, "+(parsed.rows.length-fresh)+" already in the master. "),
       parsed.cols?("Columns matched by name: "+parsed.cols.join(", ")):"No header row found, so read as code, name, MRP."));
-    if(noMrp) preview.appendChild(el("div",{class:"callout warn"},
-      el("b",{},noMrp+" of these carry no MRP. "),
-      "They import fine, but add the MRPs before shipping — the UC file takes Selling Price and Discount from it."));
     const tb=el("tbody",{});
     parsed.rows.slice(0,60).forEach(r=>tb.appendChild(el("tr",{},
       el("td",{class:"mono",style:"font-size:12px"},r.code),
@@ -2569,10 +2561,6 @@ function openBulkBuild(){
   }
   const {csv,assigned}=buildUCFile(clean);
   const lines = clean.reduce((s,c)=>s+(c.items||[]).length,0);
-  const zero=[...new Set(clean.flatMap(c=>(c.items||[]).filter(i=>!num(i.mrp)).map(i=>i.sku)))];
-  if(zero.length) api.body.appendChild(el("div",{class:"callout warn"},
-    el("b",{},zero.length+" SKU"+(zero.length>1?"s go":" goes")+" out at ₹0. "),
-    "No MRP on record for "+zero.join(", ")+", so Selling Price and Discount are both blank and the invoice carries no value. Set the MRP under Products first."));
   api.body.appendChild(el("div",{class:"callout"},
     el("b",{},clean.length+" orders · "+lines+" item rows across "+(S.settings.ucColumns||[]).length+" columns. "),
     "All five mandatory columns are filled: sales order code, COD (0, prepaid), sale order item code, shipping method (",
