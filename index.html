@@ -440,25 +440,29 @@ const Store = {
     try{ db = window.claude && claude.use ? await claude.use("db") : null; }catch(e){ db=null; }
     this.db = db; this.mode = db ? "live" : "local";
     if(db){
+      /* onSnapshot delivers the current state right after registration and on
+         every later change. There is no prefetch: a second read racing these
+         callbacks used to overwrite fresher data with a cached view. */
+      const pending={};
+      const waits=["influencers","collabs","skus"].map(c=>new Promise(res=>{ pending[c]=res; }));
+      const settle=c=>{ if(pending[c]){ pending[c](); pending[c]=null; } };
       for(const c of ["influencers","collabs","skus"]){
         db.collection(c).onSnapshot(snap=>{
           const m={}; snap.docs.forEach(d=>{ m[d.id]={id:d.id,...d.data()}; });
-          S[c]=m; if(this.ready) render();
-        }, e=>{ if(e.code==="revoked"||e.code==="unavailable") setConn("local","Offline — local only"); });
+          S[c]=m; settle(c); render();
+        }, e=>{ settle(c);
+          if(e.code==="revoked"||e.code==="unavailable") setConn("local","Offline — showing the last data loaded"); });
       }
+      let cfgDone=null; const cfgWait=new Promise(res=>{ cfgDone=res; });
+      const settleCfg=()=>{ if(cfgDone){ cfgDone(); cfgDone=null; } };
       db.doc("config/settings").onSnapshot(snap=>{
         S.settings = {...DEFAULT_SETTINGS, ...(snap.exists?snap.data():{})};
-        if(!Array.isArray(S.settings.ucColumns)||!S.settings.ucColumns.length) S.settings.ucColumns=UC_DEFAULT_COLUMNS;
-        if(this.ready) render();
-      }, ()=>{});
-      // one prefetch so the first paint has data
-      try{
-        const got = await Promise.all(["influencers","collabs","skus"].map(c=>db.collection(c).limit(1000).get()));
-        ["influencers","collabs","skus"].forEach((c,i)=>{ const m={};
-          got[i].docs.forEach(d=>{ m[d.id]={id:d.id,...d.data()}; }); S[c]=m; });
-        const cfg = await db.doc("config/settings").get();
-        if(cfg.exists) S.settings={...DEFAULT_SETTINGS,...cfg.data()};
-      }catch(e){}
+        if(!Array.isArray(S.settings.ucColumns)||!S.settings.ucColumns.length)
+          S.settings.ucColumns=UC_DEFAULT_COLUMNS.map(x=>({...x}));
+        settleCfg(); render();
+      }, settleCfg);
+      /* wait for the first delivery of each, but never hang the page on it */
+      await Promise.race([Promise.all([...waits,cfgWait]), new Promise(r=>setTimeout(r,8000))]);
     } else {
       for(const c of ["influencers","collabs","skus"]) S[c]=this.readLocal(c);
       const cfg=this.readLocal("settings"); if(cfg && cfg.channel) S.settings={...DEFAULT_SETTINGS,...cfg};
@@ -576,7 +580,9 @@ async function loadSamples(){
 async function clearSamples(){
   for(const c of ["collabs","influencers","skus"])
     for(const o of Object.values(S[c])) if(o.sample) await Store.remove(c,o.id);
-  toast("Sample data removed");
+  S.settings.seeded = true;
+  await Store.saveSettings();
+  toast("Sample data removed for good");
 }
 const hasSamples = ()=>Object.values(S.collabs).some(c=>c.sample)||Object.values(S.influencers).some(i=>i.sample);
 </script>
@@ -2666,7 +2672,11 @@ function normDate(s){
   await Store.init();
   if(window.claude && claude.use)
     claude.use("sample").then(f=>{ Sampler=f; if(Store.ready) render(); }).catch(()=>{});
-  if(!Object.keys(S.collabs).length && !Object.keys(S.influencers).length){
+  const bare = !Object.keys(S.collabs).length && !Object.keys(S.influencers).length
+            && !Object.keys(S.skus).length;
+  if(bare && !S.settings.seeded){
+    S.settings.seeded = true;
+    await Store.saveSettings();
     await loadSamples();
   }
   render();
