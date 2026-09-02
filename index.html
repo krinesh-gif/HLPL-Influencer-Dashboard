@@ -1,0 +1,1795 @@
+<title>Reel to Doorstep</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --paper:#FBF8F9; --surface:#FFFFFF; --surface-2:#F5F0F3; --surface-3:#EFE8EC;
+  --ink:#1B1420; --ink-2:#57495A; --ink-3:#8A7C8B;
+  --line:#E6DDE2; --line-strong:#D2C5CC;
+  --rose:#C8326B; --rose-ink:#8E1F49; --rose-soft:#FBEAF1;
+  --teal:#0095A6; --teal-ink:#046C79; --teal-soft:#E1F4F7;
+  --good:#177245; --good-soft:#E4F3EA;
+  --warn:#A65D00; --warn-soft:#FBEEDC;
+  --crit:#B42318; --crit-soft:#FCEAE8;
+  --c1:#C8326B; --c2:#B0790C; --c3:#0095A6; --c4:#6247D6;
+  --shadow-sm:0 1px 2px rgba(27,20,32,.06);
+  --shadow-md:0 2px 4px rgba(27,20,32,.05),0 12px 28px -14px rgba(27,20,32,.28);
+  --radius:10px;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --display:"Archivo","IBM Plex Sans",-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#141017; --surface:#1D1720; --surface-2:#251E29; --surface-3:#2E2533;
+    --ink:#F3ECEF; --ink-2:#BCACB8; --ink-3:#8B7C89;
+    --line:#332A37; --line-strong:#483B4C;
+    --rose:#E8628F; --rose-ink:#F5A3BE; --rose-soft:#381A27;
+    --teal:#2BAFBD; --teal-ink:#7FD6DF; --teal-soft:#0C2E34;
+    --good:#4FCB86; --good-soft:#122F20;
+    --warn:#E0A340; --warn-soft:#33240D;
+    --crit:#F07167; --crit-soft:#38181B;
+    --c1:#DB4E7F; --c2:#BC8110; --c3:#12A6B4; --c4:#8570E6;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+    --shadow-md:0 2px 4px rgba(0,0,0,.35),0 12px 28px -14px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141017; --surface:#1D1720; --surface-2:#251E29; --surface-3:#2E2533;
+  --ink:#F3ECEF; --ink-2:#BCACB8; --ink-3:#8B7C89;
+  --line:#332A37; --line-strong:#483B4C;
+  --rose:#E8628F; --rose-ink:#F5A3BE; --rose-soft:#381A27;
+  --teal:#2BAFBD; --teal-ink:#7FD6DF; --teal-soft:#0C2E34;
+  --good:#4FCB86; --good-soft:#122F20;
+  --warn:#E0A340; --warn-soft:#33240D;
+  --crit:#F07167; --crit-soft:#38181B;
+  --c1:#DB4E7F; --c2:#BC8110; --c3:#12A6B4; --c4:#8570E6;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 2px 4px rgba(0,0,0,.35),0 12px 28px -14px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--display);margin:0;letter-spacing:-.02em;text-wrap:balance}
+a{color:var(--rose)}
+:focus-visible{outline:2px solid var(--rose);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- shell ---------- */
+.topbar{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);box-shadow:var(--shadow-sm)}
+.topbar-in{max-width:1480px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:9px;min-width:0}
+.brand-mark{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:-.03em}
+.brand-mark em{font-style:normal;color:var(--rose)}
+.brand-sub{font-size:11px;color:var(--ink-3);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.tabs{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+.tab{font:inherit;font-weight:600;font-size:13px;color:var(--ink-2);background:none;border:0;padding:7px 13px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:7px}
+.tab:hover{background:var(--surface-2);color:var(--ink)}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.tab[aria-selected="true"].lane-m{background:var(--rose);color:#fff}
+.tab[aria-selected="true"].lane-s{background:var(--teal);color:#fff}
+.tab .cnt{font-family:var(--mono);font-size:11px;font-weight:600;background:var(--surface-3);color:var(--ink-2);border-radius:5px;padding:1px 5px}
+.tab[aria-selected="true"] .cnt{background:rgba(255,255,255,.22);color:#fff}
+.conn{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-3);font-weight:600;letter-spacing:.03em}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}
+.dot.live{background:var(--good)}
+.dot.local{background:var(--warn)}
+
+.ribbon{background:var(--surface-2);border-bottom:1px solid var(--line)}
+.ribbon-in{max-width:1480px;margin:0 auto;padding:8px 20px;display:flex;gap:8px;overflow-x:auto;align-items:center}
+.pchip{flex:none;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:4px 12px 4px 8px;font-size:12px;font-weight:600;color:var(--ink-2);cursor:pointer;font-family:inherit}
+.pchip:hover{border-color:var(--line-strong)}
+.pchip .n{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink)}
+.pchip .sw{width:8px;height:8px;border-radius:2px;flex:none}
+.pchip.alert{border-color:var(--crit);background:var(--crit-soft)}
+.pchip.alert .n{color:var(--crit)}
+
+main{max-width:1480px;margin:0 auto;padding:22px 20px 80px}
+.view-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.view-head h1{font-size:23px;font-weight:700}
+.view-head p{margin:3px 0 0;color:var(--ink-3);font-size:13px;max-width:62ch}
+.head-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---------- controls ---------- */
+.btn{font:inherit;font-weight:600;font-size:13px;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);padding:7px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-p{background:var(--rose);border-color:var(--rose);color:#fff}
+.btn-p:hover{background:var(--rose);filter:brightness(1.08)}
+.btn-s{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn-s:hover{background:var(--teal);filter:brightness(1.08)}
+.btn-q{border-color:transparent;background:transparent;color:var(--ink-2);padding:6px 9px}
+.btn-q:hover{background:var(--surface-2);color:var(--ink)}
+.btn-sm{padding:4px 9px;font-size:12px;border-radius:7px}
+.btn-danger{color:var(--crit);border-color:var(--line-strong)}
+.btn-danger:hover{background:var(--crit-soft)}
+input,select,textarea{font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;padding:7px 9px;width:100%}
+input::placeholder,textarea::placeholder{color:var(--ink-3)}
+textarea{font-family:var(--mono);font-size:12px;line-height:1.6;resize:vertical}
+select{cursor:pointer}
+label.f{display:block}
+label.f>span{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+label.f.req>span::after{content:" *";color:var(--rose)}
+.hint{font-size:11px;color:var(--ink-3);margin-top:4px}
+.err{font-size:11px;color:var(--crit);margin-top:4px;font-weight:600}
+input.bad,select.bad{border-color:var(--crit)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.filters input,.filters select{width:auto;min-width:150px}
+.search{min-width:250px!important}
+
+/* ---------- panels + tables ---------- */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.panel-h{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.panel-h h3{font-size:14px;font-weight:700;letter-spacing:-.01em}
+.panel-h .sub{font-size:12px;color:var(--ink-3)}
+.panel-b{padding:16px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:hover td{background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12.5px}
+.nowrap{white-space:nowrap}
+.t-title{font-weight:600;color:var(--ink)}
+.t-sub{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.linkish{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;text-align:left;border-bottom:1px dotted var(--line-strong)}
+.linkish:hover{color:var(--rose);border-color:var(--rose)}
+.empty{padding:46px 20px;text-align:center;color:var(--ink-3)}
+.empty h4{font-size:15px;color:var(--ink);margin-bottom:6px}
+.rowsel{width:34px}
+
+/* ---------- pills ---------- */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.02em;padding:2px 8px;border-radius:99px;white-space:nowrap;border:1px solid transparent}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.pill.neutral{background:var(--surface-3);color:var(--ink-2)}
+.pill.info{background:var(--teal-soft);color:var(--teal-ink);border-color:var(--teal)}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.crit{background:var(--crit-soft);color:var(--crit)}
+.pill.rose{background:var(--rose-soft);color:var(--rose-ink);border-color:var(--rose)}
+.pill.plain::before{display:none}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--surface-3);color:var(--ink-2)}
+.tag.pr{background:var(--rose-soft);color:var(--rose-ink)}
+.agebar{height:3px;border-radius:2px;background:var(--line);margin-top:5px;overflow:hidden}
+.agebar i{display:block;height:100%;border-radius:2px}
+
+/* ---------- KPI ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:18px}
+.kpi{background:var(--surface);padding:14px 16px}
+.kpi .k{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.kpi .v{font-family:var(--display);font-size:27px;font-weight:700;letter-spacing:-.03em;margin-top:4px;font-variant-numeric:tabular-nums}
+.kpi .d{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.kpi.accent .v{color:var(--rose)}
+.kpi.supply .v{color:var(--teal)}
+
+/* ---------- charts ---------- */
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2);font-weight:600}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--sans)}
+.tt{position:fixed;z-index:90;pointer-events:none;background:var(--ink);color:var(--paper);font-size:12px;padding:6px 9px;border-radius:7px;box-shadow:var(--shadow-md);max-width:230px;line-height:1.45}
+.tt b{font-family:var(--mono);font-weight:600}
+.tt[hidden]{display:none!important}
+
+/* ---------- drawer ---------- */
+.scrim{position:fixed;inset:0;background:rgba(20,14,22,.5);z-index:60;backdrop-filter:blur(2px)}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--paper);z-index:61;box-shadow:var(--shadow-md);display:flex;flex-direction:column;border-left:1px solid var(--line)}
+.drawer-h{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:12px}
+.drawer-h h2{font-size:17px;font-weight:700}
+.drawer-h .sub{font-size:12px;color:var(--ink-3);margin-top:2px}
+.drawer-b{padding:20px;overflow-y:auto;flex:1}
+.drawer-f{padding:12px 20px;border-top:1px solid var(--line);background:var(--surface);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fs{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:14px 16px;margin-bottom:14px}
+.fs>h4{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.fs>h4::after{content:"";flex:1;height:1px;background:var(--line)}
+.fs.lane-m>h4{color:var(--rose-ink)}
+.fs.lane-s>h4{color:var(--teal-ink)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.span2{grid-column:1/-1}
+.itemrow{display:grid;grid-template-columns:1fr 78px 34px;gap:8px;align-items:end;margin-bottom:8px}
+.callout{border-left:3px solid var(--teal);background:var(--teal-soft);padding:10px 13px;border-radius:0 8px 8px 0;font-size:12.5px;color:var(--ink-2);margin-bottom:14px}
+.callout.warn{border-color:var(--warn);background:var(--warn-soft)}
+.callout.crit{border-color:var(--crit);background:var(--crit-soft)}
+.callout b{color:var(--ink)}
+.pickbox{border:1px solid var(--line);border-radius:8px;max-height:230px;overflow-y:auto;background:var(--surface)}
+.pickrow{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;width:100%;background:none;border-left:0;border-right:0;border-top:0;font:inherit;text-align:left;color:var(--ink)}
+.pickrow:last-child{border-bottom:0}
+.pickrow:hover{background:var(--rose-soft)}
+.pickrow .who{flex:1;min-width:0}
+.pickrow .who b{display:block;font-weight:600;font-size:13px}
+.pickrow .who span{display:block;font-size:11.5px;color:var(--ink-3);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps{display:flex;gap:0;flex-wrap:wrap;margin-bottom:14px}
+.step{flex:1;min-width:88px;padding:7px 10px;font-size:11px;font-weight:700;text-align:center;background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line);border-right:0;letter-spacing:.02em}
+.step:first-child{border-radius:8px 0 0 8px}
+.step:last-child{border-right:1px solid var(--line);border-radius:0 8px 8px 0}
+.step.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.step.done{background:var(--teal-soft);color:var(--teal-ink);border-color:var(--teal-soft)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:99;background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:99px;font-size:13px;font-weight:600;box-shadow:var(--shadow-md);max-width:90vw;text-align:center}
+.toast[hidden]{display:none!important}
+.toast.bad{background:var(--crit);color:#fff}
+.selbar{position:sticky;bottom:14px;z-index:30;margin:14px auto 0;max-width:820px;background:var(--ink);color:var(--paper);border-radius:12px;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:var(--shadow-md)}
+.selbar .n{font-family:var(--mono);font-weight:600}
+.selbar .btn{background:transparent;border-color:rgba(255,255,255,.28);color:var(--paper)}
+.selbar .btn:hover{background:rgba(255,255,255,.14)}
+.selbar .btn-s{background:var(--teal);border-color:var(--teal);color:#fff}
+.mapgrid{display:grid;grid-template-columns:1fr 1fr 30px;gap:8px;align-items:center;margin-bottom:7px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width:720px){
+  .topbar-in{gap:10px}.tabs{margin-left:0;width:100%;overflow-x:auto}
+  main{padding:16px 12px 70px}.itemrow{grid-template-columns:1fr 62px 32px}
+}
+</style>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <span class="brand-mark">Reel <em>&rarr;</em> Doorstep</span>
+      <span class="brand-sub">Hivefy Lifestyle</span>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+    <div class="conn" id="conn"><span class="dot"></span><span>Connecting</span></div>
+  </div>
+</div>
+<div class="ribbon"><div class="ribbon-in" id="ribbon"></div></div>
+<main id="view"></main>
+<div class="tt" id="tt" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<script>
+/* ============================================================
+   Reel to Doorstep — influencer gifting + supply handoff console
+   Storage: artifact `db` when available, localStorage otherwise.
+   ============================================================ */
+"use strict";
+
+const STATES = ["Andaman and Nicobar Islands","Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chandigarh","Chhattisgarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Goa","Gujarat","Haryana","Himachal Pradesh","Jammu and Kashmir","Jharkhand","Karnataka","Kerala","Ladakh","Lakshadweep","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Puducherry","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal"];
+
+const SHIP_FLOW = ["Draft","Ready to Ship","Order Created","Dispatched","Delivered"];
+const SHIP_ALL  = [...SHIP_FLOW,"On Hold","Cancelled"];
+const SHIP_TONE = {"Draft":"neutral","Ready to Ship":"warn","Order Created":"info","Dispatched":"rose","Delivered":"good","On Hold":"crit","Cancelled":"neutral"};
+const PAY_STATES = ["Not Applicable (Barter)","Not Due","Due","Partially Paid","Paid"];
+const PAY_TONE = {"Not Applicable (Barter)":"neutral","Not Due":"neutral","Due":"warn","Partially Paid":"warn","Paid":"good"};
+const TNC_STATES = ["Not Sent","Sent","Confirmed"];
+const TNC_TONE = {"Not Sent":"crit","Sent":"warn","Confirmed":"good"};
+const TIERS = ["Nano (<10K)","Micro (10K-100K)","Mid (100K-500K)","Macro (500K-1M)","Celebrity (1M+)"];
+const PLATFORMS = ["Instagram","YouTube","Both"];
+const DELIVERABLES = ["1 Reel","2 Reels","Reel + Story","Story only","YouTube Shorts","Static Post","Reel + Static","Custom"];
+const BOXES = ["PR Box","Normal Box"];
+const CATEGORIES = ["Beauty","Skincare","Haircare","Lifestyle","Fashion","Mom & Baby","Fitness","Comedy","Regional"];
+
+/* --- UC bulk sale-order columns. Verify against YOUR Unicommerce template
+       under Setup -> paste your header row to remap in one click. --- */
+const UC_FIELDS = [
+  ["order.code","Sale order code (auto: PR-YYMM-###)"],
+  ["order.displayCode","Display order code (same as above)"],
+  ["order.date","Order date/time"],
+  ["order.channel","Channel code"],
+  ["order.payment","Payment method (PREPAID/COD)"],
+  ["order.cod","Cash on delivery (Yes/No)"],
+  ["cust.name","Customer name"],["cust.email","Customer email"],["cust.phone","Customer phone"],
+  ["ship.name","Shipping name"],["ship.addr1","Shipping address line 1"],["ship.addr2","Shipping address line 2"],
+  ["ship.city","Shipping city"],["ship.state","Shipping state"],["ship.country","Shipping country"],
+  ["ship.pin","Shipping pincode"],["ship.phone","Shipping phone"],
+  ["bill.name","Billing name"],["bill.addr1","Billing address line 1"],["bill.addr2","Billing address line 2"],
+  ["bill.city","Billing city"],["bill.state","Billing state"],["bill.country","Billing country"],
+  ["bill.pin","Billing pincode"],["bill.phone","Billing phone"],
+  ["item.sku","Item SKU code"],["item.qty","Item quantity"],["item.price","Item selling price"],
+  ["item.discount","Item discount"],["item.ship","Item shipping charges"],["item.total","Item total (price-discount)"],
+  ["facility.code","Facility code"],["notes","Notes / packing instruction"],["blank","(leave blank)"]
+];
+const UC_DEFAULT_COLUMNS = [
+  ["Sale Order Code","order.code"],["Display Order Code","order.displayCode"],["Order Date","order.date"],
+  ["Channel","order.channel"],["Payment Method","order.payment"],["Cash On Delivery","order.cod"],
+  ["Customer Name","cust.name"],["Customer Email","cust.email"],["Customer Phone","cust.phone"],
+  ["Shipping Name","ship.name"],["Shipping Address Line 1","ship.addr1"],["Shipping Address Line 2","ship.addr2"],
+  ["Shipping City","ship.city"],["Shipping State","ship.state"],["Shipping Country","ship.country"],
+  ["Shipping Pincode","ship.pin"],["Shipping Phone","ship.phone"],
+  ["Billing Name","bill.name"],["Billing Address Line 1","bill.addr1"],["Billing Address Line 2","bill.addr2"],
+  ["Billing City","bill.city"],["Billing State","bill.state"],["Billing Country","bill.country"],
+  ["Billing Pincode","bill.pin"],["Billing Phone","bill.phone"],
+  ["Item SKU Code","item.sku"],["Item Quantity","item.qty"],["Item Selling Price","item.price"],
+  ["Item Discount","item.discount"],["Item Shipping Charges","item.ship"],
+  ["Facility Code","facility.code"],["Notes","notes"]
+].map(([header,field])=>({header,field}));
+
+const DEFAULT_SETTINGS = {
+  channel:"PR_GIFTING", facility:"", country:"India", orderPrefix:"PR",
+  gifting:true, shippingCharge:0, brand:"Aravi Organic",
+  ucColumns:UC_DEFAULT_COLUMNS
+};
+
+/* ---------------- tiny helpers ---------------- */
+const $ = s=>document.querySelector(s);
+const el = (t,a={},...kids)=>{const n=document.createElement(t);
+  for(const k in a){const v=a[k];
+    if(v===null||v===undefined||v===false)continue;
+    if(k==="class")n.className=v; else if(k==="html")n.innerHTML=v;
+    else if(k.startsWith("on"))n.addEventListener(k.slice(2),v);
+    else if(k==="dataset")Object.assign(n.dataset,v);
+    else if(v===true)n.setAttribute(k,"");
+    else n.setAttribute(k,v);}
+  for(const kid of kids.flat()){if(kid===null||kid===undefined||kid===false)continue;
+    n.appendChild(typeof kid==="object"?kid:document.createTextNode(String(kid)));}
+  return n;};
+const esc = s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = p=>p+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const todayISO = ()=>new Date().toISOString().slice(0,10);
+const monthOf = d=>(d||"").slice(0,7);
+const nowMonth = ()=>todayISO().slice(0,7);
+const num = v=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));return isFinite(n)?n:0;};
+const inr = n=>"₹"+Math.round(num(n)).toLocaleString("en-IN");
+const inrShort = n=>{n=num(n);if(Math.abs(n)>=1e7)return "₹"+(n/1e7).toFixed(2)+"Cr";
+  if(Math.abs(n)>=1e5)return "₹"+(n/1e5).toFixed(2)+"L";
+  if(Math.abs(n)>=1e3)return "₹"+(n/1e3).toFixed(1)+"K";return "₹"+Math.round(n);};
+const compact = n=>{n=num(n);if(n>=1e7)return (n/1e7).toFixed(2)+"Cr";if(n>=1e5)return (n/1e5).toFixed(1)+"L";
+  if(n>=1e3)return (n/1e3).toFixed(1)+"K";return String(Math.round(n));};
+const dmy = d=>{if(!d)return "—";const p=String(d).slice(0,10).split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0].slice(2):d;};
+const monthLabel = m=>{if(!m)return "—";const [y,mo]=m.split("-");
+  return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(+mo)-1]+" '"+y.slice(2);};
+const daysBetween = (a,b)=>{if(!a||!b)return null;const d=(new Date(b)-new Date(a))/864e5;return isFinite(d)?Math.round(d):null;};
+const daysSince = d=>daysBetween(d,todayISO());
+const titleCase = s=>String(s||"").trim().replace(/\s+/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+const cleanHandle = h=>String(h||"").trim().replace(/^@+/,"").replace(/^https?:\/\/(www\.)?instagram\.com\//i,"").replace(/\/.*$/,"").toLowerCase();
+const digits = s=>String(s||"").replace(/\D/g,"");
+const phone10 = s=>{const d=digits(s);return d.length>10?d.slice(-10):d;};
+
+function toast(msg,bad){const t=$("#toast");t.textContent=msg;t.className="toast"+(bad?" bad":"");t.hidden=false;
+  clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true;},bad?4800:2600);}
+
+/* ---------------- validation ---------------- */
+function addressProblems(a){
+  const p=[];
+  if(!String(a.name||"").trim()) p.push(["name","Consignee name is blank"]);
+  if(phone10(a.phone).length!==10||!/^[6-9]/.test(phone10(a.phone))) p.push(["phone","Mobile must be 10 digits starting 6-9"]);
+  if(!String(a.addr1||"").trim()||String(a.addr1).trim().length<10) p.push(["addr1","Address line 1 is missing or too short"]);
+  if(!String(a.city||"").trim()) p.push(["city","City is blank"]);
+  if(!STATES.includes(a.state||"")) p.push(["state","State must match the UC list exactly"]);
+  if(digits(a.pin).length!==6) p.push(["pin","Pincode must be 6 digits"]);
+  return p;
+}
+function collabProblems(c){
+  const p = addressProblems(c.ship||{});
+  if(!(c.items||[]).length) p.push(["items","No products added to ship"]);
+  (c.items||[]).forEach((it,i)=>{
+    if(!String(it.sku||"").trim()) p.push(["items","Line "+(i+1)+" has no SKU code"]);
+    if(num(it.qty)<1) p.push(["items","Line "+(i+1)+" quantity must be at least 1"]);
+  });
+  return p;
+}
+</script>
+<script>
+/* ================= storage layer ================= */
+const S = { influencers:{}, collabs:{}, skus:{}, settings:{...DEFAULT_SETTINGS} };
+const Store = {
+  db:null, mode:"local", ready:false,
+  key(c){ return "r2d:"+c; },
+  readLocal(c){ try{ return JSON.parse(localStorage.getItem(this.key(c))||"{}"); }catch(e){ return {}; } },
+  writeLocal(c,map){ try{ localStorage.setItem(this.key(c),JSON.stringify(map)); }catch(e){} },
+
+  async init(){
+    let db=null;
+    try{ db = window.claude && claude.use ? await claude.use("db") : null; }catch(e){ db=null; }
+    this.db = db; this.mode = db ? "live" : "local";
+    if(db){
+      for(const c of ["influencers","collabs","skus"]){
+        db.collection(c).onSnapshot(snap=>{
+          const m={}; snap.docs.forEach(d=>{ m[d.id]={id:d.id,...d.data()}; });
+          S[c]=m; if(this.ready) render();
+        }, e=>{ if(e.code==="revoked"||e.code==="unavailable") setConn("local","Offline — local only"); });
+      }
+      db.doc("config/settings").onSnapshot(snap=>{
+        S.settings = {...DEFAULT_SETTINGS, ...(snap.exists?snap.data():{})};
+        if(!Array.isArray(S.settings.ucColumns)||!S.settings.ucColumns.length) S.settings.ucColumns=UC_DEFAULT_COLUMNS;
+        if(this.ready) render();
+      }, ()=>{});
+      // one prefetch so the first paint has data
+      try{
+        const got = await Promise.all(["influencers","collabs","skus"].map(c=>db.collection(c).limit(1000).get()));
+        ["influencers","collabs","skus"].forEach((c,i)=>{ const m={};
+          got[i].docs.forEach(d=>{ m[d.id]={id:d.id,...d.data()}; }); S[c]=m; });
+        const cfg = await db.doc("config/settings").get();
+        if(cfg.exists) S.settings={...DEFAULT_SETTINGS,...cfg.data()};
+      }catch(e){}
+    } else {
+      for(const c of ["influencers","collabs","skus"]) S[c]=this.readLocal(c);
+      const cfg=this.readLocal("settings"); if(cfg && cfg.channel) S.settings={...DEFAULT_SETTINGS,...cfg};
+    }
+    this.ready=true;
+    setConn(this.mode, db?"Live · shared with your team":"Local to this browser");
+  },
+  async put(coll,obj){
+    obj.updatedAt = new Date().toISOString();
+    if(!obj.id) obj.id = uid(coll.slice(0,3));
+    S[coll][obj.id]={...obj};
+    render();
+    if(this.db){ const {id,...body}=obj;
+      try{ await this.db.collection(coll).doc(id).set(body); }
+      catch(e){ toast(dbMsg(e),true); }
+    } else this.writeLocal(coll,S[coll]);
+    return obj.id;
+  },
+  async putMany(coll,list){
+    for(const o of list) await this.put(coll,o);
+  },
+  async remove(coll,id){
+    delete S[coll][id]; render();
+    if(this.db){ try{ await this.db.collection(coll).doc(id).delete(); }catch(e){ toast(dbMsg(e),true); } }
+    else this.writeLocal(coll,S[coll]);
+  },
+  async saveSettings(){
+    render();
+    if(this.db){ try{ await this.db.doc("config/settings").set({...S.settings}); }catch(e){ toast(dbMsg(e),true); } }
+    else this.writeLocal("settings",S.settings);
+  }
+};
+function dbMsg(e){
+  const c=e&&e.code;
+  if(c==="quota_exceeded") return "Storage is full — archive old collabs before adding more.";
+  if(c==="resource_exhausted") return "Too many changes at once. Wait a moment and retry.";
+  if(c==="invalid_argument") return "That record could not be saved — check the fields and retry.";
+  if(c==="revoked"||c==="not_granted") return "You no longer have edit access to this board.";
+  return "Could not save. Your change is on screen but not stored — retry in a moment.";
+}
+function setConn(mode,label){
+  const n=$("#conn"); n.innerHTML="";
+  n.append(el("span",{class:"dot "+(mode==="live"?"live":"local")}), el("span",{},label));
+}
+
+/* ================= sample data ================= */
+function sampleData(){
+  const m = nowMonth(), y = m.slice(0,4);
+  const prev = (()=>{ const d=new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,7); })();
+  const skus = [
+    {code:"ARV-CBS-100",name:"Coffee Body Scrub 100g",mrp:399},
+    {code:"ARV-VCS-30",name:"Vitamin C Face Serum 30ml",mrp:599},
+    {code:"ARV-UBT-200",name:"Ubtan Face Wash 200ml",mrp:349},
+    {code:"ARV-ROG-30",name:"Rosemary Hair Growth Oil 30ml",mrp:449},
+    {code:"ARV-PRK-01",name:"PR Kit – Glow Combo (3 pc)",mrp:1299}
+  ].map(s=>({id:uid("sku"),...s,active:true,sample:true,createdAt:todayISO()}));
+
+  const people = [
+    ["Ritika Malhotra","glowwithritika","Instagram","9821045512","Mumbai","Maharashtra","400053","B-704, Sunview Heights, Andheri West","Near Lokhandwala Market","Micro (10K-100K)","Beauty"],
+    ["Sneha Iyer","snehatriesit","Instagram","9740033218","Bengaluru","Karnataka","560095","Flat 12, Brigade Palm Court, Koramangala 6th Block","Opp. Forum Mall","Micro (10K-100K)","Skincare"],
+    ["Aditi Rao","aditisays","Both","9911220087","Gurugram","Haryana","122002","Tower C-1802, Ireo Skyon, Sector 60","","Mid (100K-500K)","Lifestyle"],
+    ["Fatima Sheikh","fatimaunfiltered","Instagram","9004471290","Hyderabad","Telangana","500081","H.No 3-45, Cyber Gateway, Hitech City","Beside Inorbit Mall","Nano (<10K)","Haircare"],
+    ["Meera Nambiar","meerandthecity","Instagram","9846120054","Kochi","Kerala","682036","Villa 8, Silver Sands, Kakkanad","","Micro (10K-100K)","Beauty"],
+    ["Prerna Joshi","prernaglows","YouTube","9820774411","Pune","Maharashtra","411045","A-303, Rohan Abhilasha, Baner","Near Balewadi Stadium","Mid (100K-500K)","Skincare"]
+  ].map(p=>({id:uid("inf"),name:p[0],handle:p[1],platform:p[2],phone:p[3],email:p[1]+"@example.com",
+    city:p[4],state:p[5],pin:p[6],addr1:p[7],addr2:p[8],tier:p[9],category:p[10],
+    notes:"",sample:true,createdAt:todayISO(),updatedAt:todayISO()}));
+
+  const pick=(i,q=1)=>[{sku:skus[i].code,name:skus[i].name,qty:q,mrp:skus[i].mrp}];
+  const base=(inf,over)=>({id:uid("col"),influencerId:inf.id,month:m,platform:inf.platform,
+    deliverable:"1 Reel",items:pick(4),box:"PR Box",owner:"Marketing",
+    ship:{name:inf.name,phone:inf.phone,email:inf.email,addr1:inf.addr1,addr2:inf.addr2,city:inf.city,state:inf.state,pin:inf.pin},
+    price:0,barter:false,payTerms:"50% advance / 50% post",payStatus:"Not Due",payDue:"",payDate:"",paid:0,
+    tnc:"Not Sent",tncDate:"",tncLink:"",shipStatus:"Draft",ucCode:"",courier:"",awb:"",
+    requestedAt:todayISO(),dispatchDate:"",deliveryDate:"",postDate:"",postLink:"",
+    views:0,likes:0,comments:0,shares:0,saves:0,reach:0,notes:"",sample:true,createdAt:todayISO(),...over});
+
+  const collabs=[
+    base(people[0],{price:12000,payTerms:"100% post-live",payStatus:"Due",payDue:todayISO(),tnc:"Confirmed",tncDate:todayISO(),
+      shipStatus:"Delivered",ucCode:"PR-2601-001",courier:"Delhivery",awb:"1489327765412",
+      requestedAt:addDays(-24),dispatchDate:addDays(-21),deliveryDate:addDays(-18),
+      postDate:addDays(-12),postLink:"https://instagram.com/reel/example-1",
+      views:184000,likes:9100,comments:412,shares:820,saves:1560,reach:196000,month:prev,
+      items:[{sku:skus[4].code,name:skus[4].name,qty:1,mrp:1299},{sku:skus[1].code,name:skus[1].name,qty:1,mrp:599}]}),
+    base(people[1],{price:8500,payStatus:"Paid",payDate:addDays(-6),paid:8500,tnc:"Confirmed",tncDate:addDays(-20),
+      shipStatus:"Delivered",ucCode:"PR-2601-002",courier:"Bluedart",awb:"77219940025",
+      requestedAt:addDays(-20),dispatchDate:addDays(-18),deliveryDate:addDays(-15),
+      postDate:addDays(-9),postLink:"https://instagram.com/reel/example-2",
+      views:96400,likes:5300,comments:268,shares:390,saves:910,reach:104000,month:prev}),
+    base(people[2],{price:35000,deliverable:"Reel + Story",payTerms:"50% advance / 50% post",payStatus:"Partially Paid",
+      paid:17500,payDue:addDays(9),tnc:"Confirmed",tncDate:addDays(-5),shipStatus:"Dispatched",
+      ucCode:"PR-2602-004",courier:"Delhivery",awb:"1489328891140",requestedAt:addDays(-6),dispatchDate:addDays(-2),
+      items:[{sku:skus[4].code,name:skus[4].name,qty:1,mrp:1299},{sku:skus[3].code,name:skus[3].name,qty:2,mrp:449}]}),
+    base(people[3],{price:0,barter:true,payStatus:"Not Applicable (Barter)",tnc:"Sent",tncDate:addDays(-3),
+      shipStatus:"Ready to Ship",box:"Normal Box",requestedAt:addDays(-4),items:pick(0,2)}),
+    base(people[4],{price:6000,payStatus:"Not Due",tnc:"Confirmed",tncDate:addDays(-2),
+      shipStatus:"Ready to Ship",requestedAt:addDays(-3),
+      items:[{sku:skus[2].code,name:skus[2].name,qty:1,mrp:349},{sku:skus[0].code,name:skus[0].name,qty:1,mrp:399}]}),
+    base(people[5],{price:28000,deliverable:"YouTube Shorts",platform:"YouTube",payStatus:"Not Due",tnc:"Not Sent",
+      shipStatus:"Draft",requestedAt:todayISO(),ship:{name:people[5].name,phone:people[5].phone,email:people[5].email,
+        addr1:people[5].addr1,addr2:people[5].addr2,city:people[5].city,state:people[5].state,pin:people[5].pin}})
+  ];
+  return {skus,people,collabs};
+}
+function addDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+async function loadSamples(){
+  const {skus,people,collabs}=sampleData();
+  for(const s of skus) await Store.put("skus",s);
+  for(const p of people) await Store.put("influencers",p);
+  for(const c of collabs) await Store.put("collabs",c);
+  toast("Sample board loaded — clear it any time from Setup");
+}
+async function clearSamples(){
+  for(const c of ["collabs","influencers","skus"])
+    for(const o of Object.values(S[c])) if(o.sample) await Store.remove(c,o.id);
+  toast("Sample data removed");
+}
+const hasSamples = ()=>Object.values(S.collabs).some(c=>c.sample)||Object.values(S.influencers).some(i=>i.sample);
+</script>
+<script>
+/* ================= derived model ================= */
+const infOf = c=>S.influencers[c.influencerId]||null;
+const collabList = ()=>Object.values(S.collabs);
+const engagements = c=>num(c.likes)+num(c.comments)+num(c.shares)+num(c.saves);
+const erOf = c=>{const b=num(c.reach)||num(c.views); return b?(engagements(c)/b*100):0;};
+const cpvOf = c=>num(c.views)?num(c.price)/num(c.views):0;
+const cpeOf = c=>engagements(c)?num(c.price)/engagements(c):0;
+const outstanding = c=>c.barter?0:Math.max(0,num(c.price)-num(c.paid));
+const isOpen = c=>!["Delivered","Cancelled"].includes(c.shipStatus);
+const shipTAT = c=>daysBetween(c.requestedAt,c.dispatchDate);
+const pendingAge = c=>["Ready to Ship","Order Created"].includes(c.shipStatus)?daysSince(c.requestedAt):null;
+const orderValue = c=>(c.items||[]).reduce((s,i)=>s+num(i.mrp)*num(i.qty),0);
+
+function nextOrderCode(){
+  const pfx = (S.settings.orderPrefix||"PR").toUpperCase();
+  const stamp = new Date().toISOString().slice(2,7).replace("-","");
+  const re = new RegExp("^"+pfx+"-"+stamp+"-(\\d+)$");
+  let max=0;
+  collabList().forEach(c=>{ const m=re.exec(c.ucCode||""); if(m) max=Math.max(max,+m[1]); });
+  return n=>pfx+"-"+stamp+"-"+String(max+n).padStart(3,"0");
+}
+
+/* ================= Unicommerce bulk file ================= */
+function ucValue(field,ctx){
+  const {c,item,code,st,s} = ctx;
+  const gift = s.gifting;
+  const price = gift ? num(item.mrp) : num(item.mrp);
+  const disc  = gift ? num(item.mrp) : 0;
+  const map = {
+    "order.code":code, "order.displayCode":code,
+    "order.date":new Date().toLocaleString("en-GB",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).replace(",",""),
+    "order.channel":s.channel, "order.payment":"PREPAID", "order.cod":"No",
+    "cust.name":st.name, "cust.email":st.email||"", "cust.phone":phone10(st.phone),
+    "ship.name":st.name, "ship.addr1":st.addr1, "ship.addr2":st.addr2||"",
+    "ship.city":st.city, "ship.state":st.state, "ship.country":s.country,
+    "ship.pin":digits(st.pin), "ship.phone":phone10(st.phone),
+    "bill.name":st.name, "bill.addr1":st.addr1, "bill.addr2":st.addr2||"",
+    "bill.city":st.city, "bill.state":st.state, "bill.country":s.country,
+    "bill.pin":digits(st.pin), "bill.phone":phone10(st.phone),
+    "item.sku":item.sku, "item.qty":num(item.qty)||1,
+    "item.price":price, "item.discount":disc, "item.ship":num(s.shippingCharge),
+    "item.total":Math.max(0,price-disc),
+    "facility.code":s.facility||"",
+    "notes":[c.box, c.deliverable, "@"+((infOf(c)||{}).handle||"")].filter(Boolean).join(" | "),
+    "blank":""
+  };
+  return map[field] ?? "";
+}
+function csvCell(v){ const s=String(v??"");
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function buildUCFile(collabs){
+  const s = S.settings, cols = s.ucColumns||UC_DEFAULT_COLUMNS;
+  const gen = nextOrderCode();
+  const rows = [cols.map(c=>csvCell(c.header)).join(",")];
+  const assigned = [];
+  collabs.forEach((c,i)=>{
+    const code = c.ucCode || gen(assigned.filter(a=>!a.reused).length+1);
+    assigned.push({collab:c,code,reused:!!c.ucCode});
+    const st = c.ship||{};
+    (c.items||[]).forEach(item=>{
+      rows.push(cols.map(col=>csvCell(ucValue(col.field,{c,item,code,st,s}))).join(","));
+    });
+  });
+  return {csv:"﻿"+rows.join("\r\n")+"\r\n", assigned};
+}
+async function saveFile(filename,data){
+  let dl=null;
+  try{ dl = window.claude && claude.use ? await claude.use("downloads") : null; }catch(e){}
+  if(dl){
+    try{ await dl.save({filename,data}); toast("Saved "+filename); return true; }
+    catch(e){
+      if(e && e.code==="declined") return false;
+      if(e && e.code==="rate_limited"){ toast("A save prompt is already open — finish it first.",true); return false; }
+      toast("Could not save the file here. Copy it from the preview box instead.",true); return false;
+    }
+  }
+  try{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([data],{type:"text/csv"}));
+    a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000); toast("Saved "+filename); return true;
+  }catch(e){ toast("Download blocked here — copy the file text instead.",true); return false; }
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); toast("Copied"); return true; }
+  catch(e){ toast("Clipboard blocked — select the text and copy manually.",true); return false; }
+}
+
+/* ================= handoff brief (replaces the WhatsApp message) ================= */
+function briefText(c){
+  const inf=infOf(c)||{}, st=c.ship||{};
+  return [
+    "SHIP REQUEST — "+(c.ucCode||"new"),
+    "Influencer : "+st.name+"  (@"+(inf.handle||"")+")",
+    "Deliverable: "+c.deliverable+" · "+c.platform,
+    "Box type   : "+c.box,
+    "",
+    "Products:",
+    ...(c.items||[]).map(i=>"  • "+i.sku+"  x"+i.qty+"  "+i.name),
+    "",
+    "Ship to:",
+    "  "+st.name+", "+phone10(st.phone),
+    "  "+[st.addr1,st.addr2].filter(Boolean).join(", "),
+    "  "+st.city+", "+st.state+" - "+digits(st.pin),
+    "",
+    c.notes?("Note: "+c.notes):null
+  ].filter(v=>v!==null).join("\n");
+}
+</script>
+<script>
+/* ================= UI state + router ================= */
+const UI = { tab:"collabs", q:"", month:"", status:"", pay:"", tnc:"", sel:new Set(), anMonth:"" };
+const TABS = [
+  {id:"collabs",  label:"Collabs",     lane:"lane-m"},
+  {id:"ship",     label:"Ship Queue",  lane:"lane-s"},
+  {id:"content",  label:"Content",     lane:"lane-m"},
+  {id:"people",   label:"Influencers", lane:"lane-m"},
+  {id:"products", label:"Products",    lane:""},
+  {id:"analytics",label:"Analytics",   lane:""},
+  {id:"setup",    label:"Setup",       lane:""}
+];
+function go(tab){ UI.tab=tab; UI.sel.clear(); window.scrollTo({top:0,behavior:"instant"}); render(); }
+
+function render(){
+  if(!Store.ready) return;
+  renderTabs(); renderRibbon();
+  const v=$("#view"); v.innerHTML="";
+  const fn={collabs:viewCollabs,ship:viewShip,content:viewContent,people:viewPeople,
+            products:viewProducts,analytics:viewAnalytics,setup:viewSetup}[UI.tab]||viewCollabs;
+  v.appendChild(fn());
+}
+function renderTabs(){
+  const n=$("#tabs"); n.innerHTML="";
+  const counts={collabs:collabList().length,ship:collabList().filter(c=>["Ready to Ship","Order Created"].includes(c.shipStatus)).length,
+    content:collabList().filter(c=>c.shipStatus==="Delivered"&&!c.postLink).length,
+    people:Object.keys(S.influencers).length,products:Object.keys(S.skus).length};
+  TABS.forEach(t=>{
+    const b=el("button",{class:"tab "+t.lane,role:"tab","aria-selected":UI.tab===t.id?"true":"false",
+      onclick:()=>go(t.id)},t.label);
+    if(counts[t.id]) b.appendChild(el("span",{class:"cnt"},String(counts[t.id])));
+    n.appendChild(b);
+  });
+}
+function renderRibbon(){
+  const n=$("#ribbon"); n.innerHTML="";
+  const L=collabList();
+  const stale=L.filter(c=>{const a=pendingAge(c);return a!==null&&a>=4;}).length;
+  const chips=[
+    ["Awaiting address",  L.filter(c=>c.shipStatus==="Draft"&&collabProblems(c).length).length, "var(--crit)","collabs"],
+    ["Ready to ship",     L.filter(c=>c.shipStatus==="Ready to Ship").length, "var(--warn)","ship"],
+    ["Order created",     L.filter(c=>c.shipStatus==="Order Created").length, "var(--teal)","ship"],
+    ["In transit",        L.filter(c=>c.shipStatus==="Dispatched").length, "var(--c1)","ship"],
+    ["Reel due",          L.filter(c=>c.shipStatus==="Delivered"&&!c.postLink).length, "var(--c4)","content"],
+    ["Payment due",       L.filter(c=>["Due","Partially Paid"].includes(c.payStatus)).length, "var(--c2)","collabs"],
+    ["T&C not confirmed", L.filter(c=>c.tnc!=="Confirmed").length, "var(--crit)","collabs"]
+  ];
+  chips.forEach(([label,n2,color,tab])=>{
+    n.appendChild(el("button",{class:"pchip",onclick:()=>go(tab)},
+      el("span",{class:"sw",style:"background:"+color}), el("span",{class:"n"},String(n2)), label));
+  });
+  if(stale) n.appendChild(el("button",{class:"pchip alert",onclick:()=>go("ship")},
+    el("span",{class:"n"},String(stale)), "pending 4+ days"));
+}
+
+/* ================= shared bits ================= */
+function pill(text,tone){ return el("span",{class:"pill "+(tone||"neutral")},text); }
+function statusPill(c){ return pill(c.shipStatus,SHIP_TONE[c.shipStatus]); }
+function personCell(c){
+  const inf=infOf(c)||{};
+  return el("td",{},
+    el("button",{class:"linkish",onclick:()=>openCollab(c.id)},(c.ship&&c.ship.name)||inf.name||"Untitled"),
+    el("div",{class:"t-sub mono"},"@"+(inf.handle||"—")+(inf.tier?" · "+inf.tier.split(" ")[0]:"")),
+    c.sample?el("div",{style:"margin-top:4px"},el("span",{class:"tag"},"sample")):null);
+}
+function itemsCell(c){
+  const its=c.items||[];
+  return el("td",{},
+    el("div",{class:"mono"},its.length?its.map(i=>i.sku+"×"+i.qty).join("  "):"—"),
+    el("div",{class:"t-sub"},el("span",{class:"tag "+(c.box==="PR Box"?"pr":"")},c.box||"—")));
+}
+function emptyState(title,body,action){
+  return el("div",{class:"empty"},el("h4",{},title),el("p",{},body),action||null);
+}
+function filterBar(opts){
+  const bar=el("div",{class:"filters"});
+  bar.appendChild(el("input",{class:"search",type:"search",placeholder:opts.placeholder||"Search name, handle, SKU, AWB, order code…",
+    value:UI.q,oninput:e=>{UI.q=e.target.value;render();}}));
+  if(opts.month!==false){
+    const months=[...new Set(collabList().map(c=>c.month).filter(Boolean))].sort().reverse();
+    const sel=el("select",{onchange:e=>{UI.month=e.target.value;render();}},
+      el("option",{value:""},"All months"),...months.map(m=>el("option",{value:m,selected:UI.month===m?true:null},monthLabel(m))));
+    bar.appendChild(sel);
+  }
+  if(opts.status!==false){
+    bar.appendChild(el("select",{onchange:e=>{UI.status=e.target.value;render();}},
+      el("option",{value:""},"All shipment states"),
+      ...SHIP_ALL.map(s=>el("option",{value:s,selected:UI.status===s?true:null},s))));
+  }
+  if(opts.pay){
+    bar.appendChild(el("select",{onchange:e=>{UI.pay=e.target.value;render();}},
+      el("option",{value:""},"All payment states"),
+      ...PAY_STATES.map(s=>el("option",{value:s,selected:UI.pay===s?true:null},s))));
+  }
+  if(UI.q||UI.month||UI.status||UI.pay)
+    bar.appendChild(el("button",{class:"btn btn-q btn-sm",onclick:()=>{UI.q="";UI.month="";UI.status="";UI.pay="";render();}},"Clear filters"));
+  return bar;
+}
+function matches(c){
+  const inf=infOf(c)||{}, st=c.ship||{};
+  if(UI.month && c.month!==UI.month) return false;
+  if(UI.status && c.shipStatus!==UI.status) return false;
+  if(UI.pay && c.payStatus!==UI.pay) return false;
+  if(!UI.q) return true;
+  const hay=[st.name,inf.name,inf.handle,st.city,st.state,st.pin,c.ucCode,c.awb,c.courier,c.deliverable,c.notes,
+    ...(c.items||[]).map(i=>i.sku+" "+i.name)].join(" ").toLowerCase();
+  return hay.includes(UI.q.toLowerCase());
+}
+</script>
+<script>
+/* ================= VIEW: Collabs (marketing home) ================= */
+function viewCollabs(){
+  const wrap=el("div",{});
+  wrap.appendChild(el("div",{class:"view-head"},
+    el("div",{},el("h1",{},"Collab register"),
+      el("p",{},"Every locked influencer, the box that goes out, the money, and the paperwork. One row — both teams read it.")),
+    el("div",{class:"head-actions"},
+      el("button",{class:"btn",onclick:()=>go("people")},"Influencer master"),
+      el("button",{class:"btn btn-p",onclick:()=>openCollab(null)},"+ Lock an influencer"))));
+
+  const L=collabList().filter(matches).sort((a,b)=>(b.requestedAt||"").localeCompare(a.requestedAt||""));
+  const budget=L.reduce((s,c)=>s+num(c.price),0);
+  const due=L.reduce((s,c)=>s+outstanding(c),0);
+  wrap.appendChild(el("div",{class:"kpis"},
+    kpi("Collabs shown",String(L.length),UI.month?monthLabel(UI.month):"All months"),
+    kpi("Budget locked",inrShort(budget),"Sum of locked prices","accent"),
+    kpi("Still to pay",inrShort(due),L.filter(c=>outstanding(c)>0).length+" influencers"),
+    kpi("T&C confirmed",L.filter(c=>c.tnc==="Confirmed").length+"/"+L.length,"Mail confirmation on record"),
+    kpi("Boxes open",String(L.filter(isOpen).length),"Not yet delivered","supply")));
+
+  wrap.appendChild(filterBar({pay:true}));
+
+  if(!L.length){
+    wrap.appendChild(el("div",{class:"panel"},collabList().length
+      ? emptyState("Nothing matches those filters","Widen the search or clear the filters above.")
+      : emptyState("No collabs yet","Lock your first influencer, or load a sample board to see how the flow works.",
+          el("div",{style:"display:flex;gap:8px;justify-content:center;margin-top:14px"},
+            el("button",{class:"btn btn-p",onclick:()=>openCollab(null)},"+ Lock an influencer"),
+            el("button",{class:"btn",onclick:loadSamples},"Load sample board")))));
+    return wrap;
+  }
+
+  const tb=el("tbody",{});
+  L.forEach(c=>{
+    const probs=collabProblems(c);
+    tb.appendChild(el("tr",{},
+      personCell(c),
+      el("td",{},el("div",{},c.deliverable||"—"),el("div",{class:"t-sub"},c.platform+" · "+monthLabel(c.month))),
+      itemsCell(c),
+      el("td",{},statusPill(c), probs.length&&c.shipStatus==="Draft"
+        ? el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},probs.length+" field"+(probs.length>1?"s":"")+" to fix")
+        : c.awb?el("div",{class:"t-sub mono"},c.courier+" "+c.awb):null),
+      el("td",{class:"num"},c.barter?el("span",{class:"tag"},"barter"):inr(c.price)),
+      el("td",{},pill(c.payStatus,PAY_TONE[c.payStatus]),
+        outstanding(c)>0?el("div",{class:"t-sub mono"},inr(outstanding(c))+" open"):null),
+      el("td",{},pill(c.tnc,TNC_TONE[c.tnc]),c.tncDate?el("div",{class:"t-sub mono"},dmy(c.tncDate)):null),
+      el("td",{class:"num"},num(c.views)?compact(c.views):"—",
+        num(c.views)?el("div",{class:"t-sub"},erOf(c).toFixed(1)+"% ER"):null),
+      el("td",{class:"nowrap"},el("button",{class:"btn btn-sm btn-q",onclick:()=>openCollab(c.id)},"Open"))));
+  });
+  wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},
+    el("table",{},
+      el("thead",{},el("tr",{},...["Influencer","Deliverable","Products / box","Shipment","Locked ₹","Payment","T&C mail","Views","",].map(h=>
+        el("th",{class:["Locked ₹","Views"].includes(h)?"num":""},h)))),
+      tb))));
+  return wrap;
+}
+function kpi(k,v,d,cls){ return el("div",{class:"kpi "+(cls||"")},
+  el("div",{class:"k"},k),el("div",{class:"v"},v),el("div",{class:"d"},d||"")); }
+
+/* ================= VIEW: Ship Queue (supply home) ================= */
+function viewShip(){
+  const wrap=el("div",{});
+  wrap.appendChild(el("div",{class:"view-head"},
+    el("div",{},el("h1",{},"Ship queue"),
+      el("p",{},"Pick the rows that are ready, download the Unicommerce bulk file, upload it in UC, then paste the dispatch export back in. No re-typing.")),
+    el("div",{class:"head-actions"},
+      el("button",{class:"btn",onclick:openPasteBack},"Paste dispatch details"),
+      el("button",{class:"btn btn-s",onclick:openBulkBuild},"Build UC bulk file"))));
+
+  const L=collabList().filter(matches).filter(c=>c.shipStatus!=="Cancelled")
+    .sort((a,b)=>{const r=SHIP_FLOW.indexOf(a.shipStatus)-SHIP_FLOW.indexOf(b.shipStatus);
+      return r||(a.requestedAt||"").localeCompare(b.requestedAt||"");});
+  const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
+  const blocked=ready.filter(c=>collabProblems(c).length);
+  const tats=collabList().map(shipTAT).filter(v=>v!==null&&v>=0);
+
+  wrap.appendChild(el("div",{class:"kpis"},
+    kpi("Ready to ship",String(ready.length),blocked.length?blocked.length+" blocked on address":"All address-clean","supply"),
+    kpi("In UC, not dispatched",String(collabList().filter(c=>c.shipStatus==="Order Created").length),"Orders created, awaiting pickup"),
+    kpi("In transit",String(collabList().filter(c=>c.shipStatus==="Dispatched").length),"AWB assigned"),
+    kpi("Median request→dispatch",tats.length?median(tats)+" d":"—",tats.length+" shipments measured"),
+    kpi("Oldest pending",String(Math.max(0,...collabList().map(c=>pendingAge(c)||0)))+" d","Since marketing raised it")));
+
+  if(blocked.length) wrap.appendChild(el("div",{class:"callout crit"},
+    el("b",{},blocked.length+" row"+(blocked.length>1?"s":"")+" cannot go into UC yet — "),
+    "pincode, state or mobile is wrong. Open the row and fix it, or send it back to marketing. UC rejects the whole file for one bad state name."));
+
+  wrap.appendChild(filterBar({pay:false}));
+  if(!L.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("Queue is clear","Nothing waiting on supply right now."))); return wrap; }
+
+  const tb=el("tbody",{});
+  L.forEach(c=>{
+    const probs=collabProblems(c), age=pendingAge(c);
+    const canPick=c.shipStatus==="Ready to Ship"&&!probs.length;
+    const cb=el("input",{type:"checkbox",style:"width:auto",disabled:!canPick?true:null,
+      checked:UI.sel.has(c.id)?true:null,"aria-label":"Select "+((c.ship||{}).name||""),
+      onchange:e=>{e.target.checked?UI.sel.add(c.id):UI.sel.delete(c.id);render();}});
+    tb.appendChild(el("tr",{},
+      el("td",{class:"rowsel"},cb),
+      personCell(c),
+      itemsCell(c),
+      el("td",{},
+        el("div",{class:"mono",style:"font-size:12px"},[(c.ship||{}).city,(c.ship||{}).state].filter(Boolean).join(", ")||"—"),
+        el("div",{class:"t-sub mono"},digits((c.ship||{}).pin)||"no pin"),
+        probs.length?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},probs[0][1]):null),
+      el("td",{},statusPill(c),
+        age!==null?el("div",{},el("div",{class:"t-sub mono"},age+"d in queue"),
+          el("div",{class:"agebar"},el("i",{style:"width:"+Math.min(100,age*14)+"%;background:"+(age>=4?"var(--crit)":age>=2?"var(--warn)":"var(--teal)")}))):null),
+      el("td",{class:"mono"},c.ucCode||"—"),
+      el("td",{class:"mono"},c.awb?el("div",{},c.awb):"—",c.courier?el("div",{class:"t-sub"},c.courier):null),
+      el("td",{class:"nowrap"},
+        el("button",{class:"btn btn-sm btn-q",title:"Copy the handoff note",onclick:()=>copyText(briefText(c))},"Copy brief"),
+        el("button",{class:"btn btn-sm btn-q",onclick:()=>openCollab(c.id)},"Open"))));
+  });
+  wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},
+    el("table",{},el("thead",{},el("tr",{},
+      el("th",{class:"rowsel"},el("input",{type:"checkbox",style:"width:auto","aria-label":"Select all shippable",
+        onchange:e=>{UI.sel.clear();
+          if(e.target.checked) L.filter(c=>c.shipStatus==="Ready to Ship"&&!collabProblems(c).length).forEach(c=>UI.sel.add(c.id));
+          render();}})),
+      ...["Influencer","Products / box","Destination","Stage","UC order code","Tracking",""].map(h=>el("th",{},h)))),
+    tb))));
+
+  if(UI.sel.size) wrap.appendChild(el("div",{class:"selbar"},
+    el("span",{class:"n"},UI.sel.size), el("span",{},"selected"),
+    el("button",{class:"btn btn-sm",onclick:()=>{UI.sel.clear();render();}},"Clear"),
+    el("span",{style:"flex:1"}),
+    el("button",{class:"btn btn-sm",onclick:()=>bulkStatus("On Hold")},"Put on hold"),
+    el("button",{class:"btn btn-sm btn-s",onclick:openBulkBuild},"Build UC bulk file →")));
+  return wrap;
+}
+function median(a){const s=[...a].sort((x,y)=>x-y);const m=s.length>>1;
+  return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);}
+async function bulkStatus(status){
+  for(const id of [...UI.sel]){ const c=S.collabs[id]; if(c) await Store.put("collabs",{...c,shipStatus:status}); }
+  UI.sel.clear(); toast("Moved to "+status);
+}
+</script>
+<script>
+/* ================= VIEW: Content & performance ================= */
+function viewContent(){
+  const wrap=el("div",{});
+  wrap.appendChild(el("div",{class:"view-head"},
+    el("div",{},el("h1",{},"Content & performance"),
+      el("p",{},"What went live, what it did, and what each view cost. Fill the numbers once the reel has run 7 days.")),
+    el("div",{class:"head-actions"},el("button",{class:"btn",onclick:exportPerformance},"Export performance CSV"))));
+
+  const L=collabList().filter(matches).filter(c=>c.postLink||c.shipStatus==="Delivered"||num(c.views))
+    .sort((a,b)=>(b.postDate||"").localeCompare(a.postDate||""));
+  const live=L.filter(c=>num(c.views)>0);
+  const spend=live.reduce((s,c)=>s+num(c.price),0), views=live.reduce((s,c)=>s+num(c.views),0);
+  const eng=live.reduce((s,c)=>s+engagements(c),0);
+  wrap.appendChild(el("div",{class:"kpis"},
+    kpi("Reels live",String(live.length),L.length-live.length+" awaiting numbers"),
+    kpi("Total views",compact(views),"Across reported reels","accent"),
+    kpi("Blended CPV",views?"₹"+(spend/views).toFixed(2):"—","Spend ÷ views"),
+    kpi("Blended CPE",eng?"₹"+(spend/eng).toFixed(2):"—","Spend ÷ engagements"),
+    kpi("Avg ER",live.length?(live.reduce((s,c)=>s+erOf(c),0)/live.length).toFixed(1)+"%":"—","On reach where given")));
+
+  wrap.appendChild(filterBar({status:false,pay:false,placeholder:"Search influencer, handle, month…"}));
+  if(!L.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("Nothing has shipped yet","Performance rows appear once a box is delivered or a reel link is added."))); return wrap; }
+
+  const tb=el("tbody",{});
+  L.forEach(c=>{
+    const er=erOf(c);
+    tb.appendChild(el("tr",{},
+      personCell(c),
+      el("td",{},c.postDate?dmy(c.postDate):pill("Not posted","warn"),
+        c.postLink?el("div",{class:"t-sub"},el("a",{href:c.postLink,target:"_blank",rel:"noopener"},"open reel")):null),
+      el("td",{class:"num"},num(c.views)?compact(c.views):"—"),
+      el("td",{class:"num"},num(c.reach)?compact(c.reach):"—"),
+      el("td",{class:"num"},num(c.likes)?compact(c.likes):"—"),
+      el("td",{class:"num"},engagements(c)?compact(engagements(c)):"—"),
+      el("td",{class:"num"},er?er.toFixed(1)+"%":"—"),
+      el("td",{class:"num"},c.barter?"barter":inr(c.price)),
+      el("td",{class:"num"},cpvOf(c)?"₹"+cpvOf(c).toFixed(2):"—"),
+      el("td",{class:"nowrap"},el("button",{class:"btn btn-sm btn-q",onclick:()=>openCollab(c.id,"metrics")},
+        num(c.views)?"Edit":"Add numbers"))));
+  });
+  wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
+    el("thead",{},el("tr",{},el("th",{},"Influencer"),el("th",{},"Posted"),
+      ...["Views","Reach","Likes","Engagements","ER","Locked ₹","CPV"].map(h=>el("th",{class:"num"},h)),el("th",{},""))),
+    tb))));
+  return wrap;
+}
+function exportPerformance(){
+  const rows=[["Month","Influencer","Handle","Platform","Deliverable","Locked price","Payment status","Paid",
+    "Posted on","Link","Views","Reach","Likes","Comments","Shares","Saves","Engagements","ER %","CPV","CPE",
+    "Shipment","UC order","Courier","AWB","Dispatched","Delivered"]];
+  collabList().sort((a,b)=>(a.month||"").localeCompare(b.month||"")).forEach(c=>{
+    const i=infOf(c)||{};
+    rows.push([c.month,(c.ship||{}).name||i.name,"@"+(i.handle||""),c.platform,c.deliverable,num(c.price),c.payStatus,num(c.paid),
+      c.postDate,c.postLink,num(c.views),num(c.reach),num(c.likes),num(c.comments),num(c.shares),num(c.saves),
+      engagements(c),erOf(c).toFixed(2),cpvOf(c).toFixed(3),cpeOf(c).toFixed(2),
+      c.shipStatus,c.ucCode,c.courier,c.awb,c.dispatchDate,c.deliveryDate]);
+  });
+  saveFile("influencer-performance-"+todayISO()+".csv","﻿"+rows.map(r=>r.map(csvCell).join(",")).join("\r\n"));
+}
+
+/* ================= VIEW: Influencer master ================= */
+function viewPeople(){
+  const wrap=el("div",{});
+  wrap.appendChild(el("div",{class:"view-head"},
+    el("div",{},el("h1",{},"Influencer master"),
+      el("p",{},"Saved once, reused forever. Repeat a collab and the address, pincode and mobile come along — nobody asks in the group again.")),
+    el("div",{class:"head-actions"},el("button",{class:"btn btn-p",onclick:()=>openInfluencer(null)},"+ Add influencer"))));
+
+  const q=UI.q.toLowerCase();
+  const list=Object.values(S.influencers).filter(i=>!q||[i.name,i.handle,i.city,i.state,i.pin,i.phone,i.category].join(" ").toLowerCase().includes(q))
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  wrap.appendChild(el("div",{class:"filters"},
+    el("input",{class:"search",type:"search",placeholder:"Search name, handle, city, pincode, mobile…",value:UI.q,
+      oninput:e=>{UI.q=e.target.value;render();}})));
+
+  if(!list.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("No influencers saved yet",
+    "Add one here, or it gets created automatically the first time you lock a collab."))); return wrap; }
+
+  const tb=el("tbody",{});
+  list.forEach(i=>{
+    const cs=collabList().filter(c=>c.influencerId===i.id);
+    const spend=cs.reduce((s,c)=>s+num(c.price),0), v=cs.reduce((s,c)=>s+num(c.views),0);
+    const last=cs.map(c=>c.requestedAt).filter(Boolean).sort().pop();
+    const probs=addressProblems({name:i.name,phone:i.phone,addr1:i.addr1,city:i.city,state:i.state,pin:i.pin});
+    tb.appendChild(el("tr",{},
+      el("td",{},el("button",{class:"linkish",onclick:()=>openInfluencer(i.id)},i.name),
+        el("div",{class:"t-sub mono"},"@"+(i.handle||"—")+" · "+(i.platform||"")),
+        i.sample?el("div",{style:"margin-top:4px"},el("span",{class:"tag"},"sample")):null),
+      el("td",{},el("div",{},[i.city,i.state].filter(Boolean).join(", ")||"—"),
+        el("div",{class:"t-sub mono"},digits(i.pin)||"—"),
+        probs.length?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},"address incomplete"):null),
+      el("td",{class:"mono"},phone10(i.phone)||"—"),
+      el("td",{},i.tier||"—",el("div",{class:"t-sub"},i.category||"")),
+      el("td",{class:"num"},String(cs.length),last?el("div",{class:"t-sub"},"last "+dmy(last)):null),
+      el("td",{class:"num"},inrShort(spend)),
+      el("td",{class:"num"},v?compact(v):"—"),
+      el("td",{class:"nowrap"},
+        el("button",{class:"btn btn-sm btn-p",onclick:()=>repeatCollab(i.id)},"Repeat"),
+        el("button",{class:"btn btn-sm btn-q",onclick:()=>openInfluencer(i.id)},"Edit"))));
+  });
+  wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
+    el("thead",{},el("tr",{},el("th",{},"Influencer"),el("th",{},"Ship to"),el("th",{},"Mobile"),el("th",{},"Tier"),
+      el("th",{class:"num"},"Collabs"),el("th",{class:"num"},"Spend"),el("th",{class:"num"},"Views"),el("th",{},""))),
+    tb))));
+  return wrap;
+}
+
+/* ================= VIEW: Products ================= */
+function viewProducts(){
+  const wrap=el("div",{});
+  wrap.appendChild(el("div",{class:"view-head"},
+    el("div",{},el("h1",{},"Product master"),
+      el("p",{},"The SKU codes exactly as they sit in Unicommerce. Marketing picks from this list, so no bulk upload ever fails on a typed SKU.")),
+    el("div",{class:"head-actions"},
+      el("button",{class:"btn",onclick:openSkuImport},"Paste SKU list"),
+      el("button",{class:"btn btn-p",onclick:()=>openSku(null)},"+ Add SKU"))));
+
+  const list=Object.values(S.skus).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
+  if(!list.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("No SKUs yet",
+    "Export your item master from Unicommerce and paste it in — code, name, MRP.",
+    el("button",{class:"btn btn-p",style:"margin-top:14px",onclick:openSkuImport},"Paste SKU list")))); return wrap; }
+
+  const tb=el("tbody",{});
+  list.forEach(s=>{
+    const used=collabList().filter(c=>(c.items||[]).some(i=>i.sku===s.code)).length;
+    tb.appendChild(el("tr",{},
+      el("td",{class:"mono"},s.code, s.sample?el("span",{class:"tag",style:"margin-left:6px"},"sample"):null),
+      el("td",{},s.name),
+      el("td",{class:"num"},inr(s.mrp)),
+      el("td",{},s.active===false?pill("Inactive","neutral"):pill("Active","good")),
+      el("td",{class:"num"},String(used)),
+      el("td",{class:"nowrap"},el("button",{class:"btn btn-sm btn-q",onclick:()=>openSku(s.id)},"Edit"))));
+  });
+  wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
+    el("thead",{},el("tr",{},el("th",{},"SKU code"),el("th",{},"Product"),el("th",{class:"num"},"MRP"),
+      el("th",{},"Status"),el("th",{class:"num"},"Used in"),el("th",{},""))),tb))));
+  return wrap;
+}
+</script>
+<script>
+/* ================= charts ================= */
+const SVGNS="http://www.w3.org/2000/svg";
+const sv=(t,a={})=>{const n=document.createElementNS(SVGNS,t);for(const k in a)if(a[k]!==null&&a[k]!==undefined)n.setAttribute(k,a[k]);return n;};
+function topRound(x,y,w,h,r){ r=Math.min(r,w/2,h); if(h<=0) return "";
+  return `M${x},${y+h} L${x},${y+r} Q${x},${y} ${x+r},${y} L${x+w-r},${y} Q${x+w},${y} ${x+w},${y+r} L${x+w},${y+h} Z`; }
+function rightRound(x,y,w,h,r){ r=Math.min(r,h/2,w); if(w<=0) return "";
+  return `M${x},${y} L${x+w-r},${y} Q${x+w},${y} ${x+w},${y+r} L${x+w},${y+h-r} Q${x+w},${y+h} ${x+w-r},${y+h} L${x},${y+h} Z`; }
+function tipOn(node,html){
+  node.addEventListener("pointerenter",e=>{const t=$("#tt");t.innerHTML=html;t.hidden=false;moveTip(e);});
+  node.addEventListener("pointermove",moveTip);
+  node.addEventListener("pointerleave",()=>{$("#tt").hidden=true;});
+}
+function moveTip(e){const t=$("#tt");const pad=14;
+  let x=e.clientX+pad,y=e.clientY+pad;
+  const r=t.getBoundingClientRect();
+  if(x+r.width>innerWidth-8)x=e.clientX-r.width-pad;
+  if(y+r.height>innerHeight-8)y=e.clientY-r.height-pad;
+  t.style.left=x+"px";t.style.top=y+"px";}
+
+function barsV(data,opt={}){ // data: [{label,value,tip}]
+  const W=620,H=210,padL=6,padR=6,padT=24,padB=28;
+  const svg=sv("svg",{viewBox:`0 0 ${W} ${H}`,width:"100%",role:"img","aria-label":opt.aria||""});
+  const max=Math.max(1,...data.map(d=>d.value));
+  const iw=W-padL-padR, ih=H-padT-padB;
+  [0,.5,1].forEach(f=>svg.appendChild(sv("line",{x1:padL,x2:W-padR,y1:padT+ih*f,y2:padT+ih*f,
+    stroke:"var(--line)","stroke-width":1})));
+  const step=iw/Math.max(1,data.length), bw=Math.min(46,step*0.62);
+  data.forEach((d,i)=>{
+    const h=Math.round(ih*(d.value/max)), x=padL+step*i+(step-bw)/2, y=padT+ih-h;
+    const g=sv("g",{});
+    g.appendChild(sv("path",{d:topRound(x,y,bw,Math.max(h,d.value>0?2:0),4),fill:opt.color||"var(--c1)"}));
+    if(d.value>0) g.appendChild(sv("text",{x:x+bw/2,y:y-7,"text-anchor":"middle","font-size":11,"font-weight":600,
+      fill:"var(--ink-2)"})).textContent=opt.fmt?opt.fmt(d.value):String(d.value);
+    const lab=sv("text",{x:x+bw/2,y:H-9,"text-anchor":"middle","font-size":11,fill:"var(--ink-3)"});
+    lab.textContent=d.label; g.appendChild(lab);
+    const hit=sv("rect",{x:padL+step*i,y:padT,width:step,height:ih,fill:"transparent"});
+    g.appendChild(hit); tipOn(hit,d.tip||`${esc(d.label)} · <b>${opt.fmt?opt.fmt(d.value):d.value}</b>`);
+    svg.appendChild(g);
+  });
+  return svg;
+}
+function barsH(data,opt={}){ // data:[{label,value,color,tip}]
+  const rowH=34,W=620,padL=0,padR=6,labelW=150;
+  const H=Math.max(60,data.length*rowH+8);
+  const svg=sv("svg",{viewBox:`0 0 ${W} ${H}`,width:"100%",role:"img","aria-label":opt.aria||""});
+  const max=Math.max(1,...data.map(d=>d.value));
+  const track=W-labelW-padR-70;
+  data.forEach((d,i)=>{
+    const y=i*rowH+6, bh=16;
+    const t=sv("text",{x:0,y:y+13,"font-size":12,fill:"var(--ink-2)","font-weight":600});
+    t.textContent=d.label; svg.appendChild(t);
+    svg.appendChild(sv("rect",{x:labelW,y,width:track,height:bh,rx:4,fill:"var(--surface-2)"}));
+    const w=Math.round(track*(d.value/max));
+    svg.appendChild(sv("path",{d:rightRound(labelW,y,Math.max(w,d.value>0?3:0),bh,4),fill:d.color||"var(--c1)"}));
+    const v=sv("text",{x:labelW+track+8,y:y+13,"font-size":12,fill:"var(--ink)","font-weight":600});
+    v.textContent=opt.fmt?opt.fmt(d.value):String(d.value); svg.appendChild(v);
+    const hit=sv("rect",{x:0,y:y-4,width:W,height:rowH,fill:"transparent"});
+    svg.appendChild(hit); tipOn(hit,d.tip||`${esc(d.label)} · <b>${opt.fmt?opt.fmt(d.value):d.value}</b>`);
+  });
+  return svg;
+}
+function chartPanel(title,sub,node,legend){
+  return el("div",{class:"panel"},
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},title),sub?el("div",{class:"sub"},sub):null),
+      legend?el("div",{style:"margin-left:auto"},legend):null),
+    el("div",{class:"panel-b"},node));
+}
+
+/* ================= VIEW: Analytics ================= */
+function viewAnalytics(){
+  const wrap=el("div",{});
+  const all=collabList();
+  const months=[...new Set(all.map(c=>c.month).filter(Boolean))].sort();
+  const scope=UI.anMonth?all.filter(c=>c.month===UI.anMonth):all;
+
+  wrap.appendChild(el("div",{class:"view-head"},
+    el("div",{},el("h1",{},"Programme analytics"),
+      el("p",{},"How many influencers you locked, what it cost, what it returned, and how fast supply turned boxes around.")),
+    el("div",{class:"head-actions"},
+      el("select",{style:"width:auto",onchange:e=>{UI.anMonth=e.target.value;render();}},
+        el("option",{value:""},"All time"),
+        ...months.slice().reverse().map(m=>el("option",{value:m,selected:UI.anMonth===m?true:null},monthLabel(m)))),
+      el("button",{class:"btn",onclick:exportPerformance},"Export CSV"))));
+
+  if(!all.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("Nothing to analyse yet",
+    "Lock a few collabs first — the numbers build themselves."))); return wrap; }
+
+  const budget=scope.reduce((s,c)=>s+num(c.price),0);
+  const paid=scope.reduce((s,c)=>s+num(c.paid),0);
+  const due=scope.reduce((s,c)=>s+outstanding(c),0);
+  const views=scope.reduce((s,c)=>s+num(c.views),0);
+  const live=scope.filter(c=>num(c.views)>0);
+  const tats=scope.map(shipTAT).filter(v=>v!==null&&v>=0);
+  const people=new Set(scope.map(c=>c.influencerId)).size;
+  wrap.appendChild(el("div",{class:"kpis"},
+    kpi("Influencers locked",String(people),scope.length+" collabs"+(UI.anMonth?" in "+monthLabel(UI.anMonth):"")),
+    kpi("Budget locked",inrShort(budget),"Avg "+inrShort(scope.length?budget/scope.length:0)+" per collab","accent"),
+    kpi("Paid out",inrShort(paid),inrShort(due)+" still open"),
+    kpi("Views delivered",compact(views),live.length+" reels reported"),
+    kpi("Blended CPV",views?"₹"+(budget/views).toFixed(2):"—","Locked spend ÷ views"),
+    kpi("Median dispatch TAT",tats.length?median(tats)+" days":"—","Request → dispatch","supply")));
+
+  const grid=el("div",{class:"chart-grid"});
+  const last=months.slice(-8);
+  grid.appendChild(chartPanel("Influencers locked per month","Count of collabs by campaign month",
+    barsV(last.map(m=>({label:monthLabel(m),value:all.filter(c=>c.month===m).length,
+      tip:`${monthLabel(m)}<br><b>${all.filter(c=>c.month===m).length}</b> collabs · <b>${inrShort(all.filter(c=>c.month===m).reduce((s,c)=>s+num(c.price),0))}</b> locked`})),
+      {color:"var(--c1)",aria:"Collabs per month"})));
+  grid.appendChild(chartPanel("Budget locked per month","Sum of locked prices, barter excluded",
+    barsV(last.map(m=>({label:monthLabel(m),value:all.filter(c=>c.month===m).reduce((s,c)=>s+num(c.price),0)})),
+      {color:"var(--c2)",fmt:inrShort,aria:"Budget per month"})));
+
+  const tierRows=TIERS.map((t,i)=>{
+    const rows=scope.filter(c=>(infOf(c)||{}).tier===t);
+    return {label:t.split(" (")[0],value:rows.reduce((s,c)=>s+num(c.price),0),color:`var(--c${(i%4)+1})`,
+      tip:`${esc(t)}<br><b>${rows.length}</b> collabs · <b>${inrShort(rows.reduce((s,c)=>s+num(c.price),0))}</b> · ${compact(rows.reduce((s,c)=>s+num(c.views),0))} views`};
+  }).filter(r=>r.value>0);
+  grid.appendChild(chartPanel("Where the budget went","Locked spend by influencer tier",
+    tierRows.length?barsH(tierRows,{fmt:inrShort,aria:"Spend by tier"}):el("div",{class:"empty"},"No priced collabs in this scope yet."),
+    el("div",{class:"legend"},...tierRows.map(r=>el("span",{},el("i",{style:"background:"+r.color}),r.label)))));
+
+  const stageColor={"Draft":"var(--ink-3)","Ready to Ship":"var(--warn)","Order Created":"var(--c3)",
+    "Dispatched":"var(--c1)","Delivered":"var(--good)","On Hold":"var(--crit)"};
+  const stageRows=[...SHIP_FLOW,"On Hold"].map(s=>({label:s,value:all.filter(c=>c.shipStatus===s).length,color:stageColor[s],
+    tip:`<b>${all.filter(c=>c.shipStatus===s).length}</b> collabs at “${esc(s)}”`})).filter(r=>r.value>0);
+  grid.appendChild(chartPanel("Pipeline right now","Every open collab by stage — all months",
+    stageRows.length?barsH(stageRows,{aria:"Pipeline by stage"}):el("div",{class:"empty"},"Pipeline is empty.")));
+  wrap.appendChild(grid);
+
+  const best=live.slice().sort((a,b)=>(cpvOf(a)||9e9)-(cpvOf(b)||9e9)).slice(0,8);
+  if(best.length){
+    const tb=el("tbody",{});
+    best.forEach((c,i)=>{const inf=infOf(c)||{};
+      tb.appendChild(el("tr",{},
+        el("td",{class:"num"},String(i+1)),
+        el("td",{},el("button",{class:"linkish",onclick:()=>openCollab(c.id)},(c.ship||{}).name||inf.name),
+          el("div",{class:"t-sub mono"},"@"+(inf.handle||"")+" · "+monthLabel(c.month))),
+        el("td",{},inf.tier||"—"),
+        el("td",{class:"num"},inr(c.price)),
+        el("td",{class:"num"},compact(c.views)),
+        el("td",{class:"num"},erOf(c).toFixed(1)+"%"),
+        el("td",{class:"num",style:"font-weight:600"},"₹"+cpvOf(c).toFixed(2))));
+    });
+    wrap.appendChild(el("div",{style:"margin-top:16px"},el("div",{class:"panel"},
+      el("div",{class:"panel-h"},el("h3",{},"Cheapest views bought"),
+        el("div",{class:"sub"},"Lowest cost per view — repeat these first")),
+      el("div",{class:"tw"},el("table",{},el("thead",{},el("tr",{},el("th",{class:"num"},"#"),el("th",{},"Influencer"),
+        el("th",{},"Tier"),el("th",{class:"num"},"Paid"),el("th",{class:"num"},"Views"),el("th",{class:"num"},"ER"),
+        el("th",{class:"num"},"CPV"))),tb)))));
+  }
+  return wrap;
+}
+</script>
+<script>
+/* ================= drawer machinery ================= */
+let closeDrawer=()=>{};
+function drawer(title,sub,bodyFn,footFn){
+  closeDrawer();
+  const scrim=el("div",{class:"scrim",onclick:()=>close()});
+  const d=el("aside",{class:"drawer",role:"dialog","aria-modal":"true","aria-label":title});
+  const head=el("div",{class:"drawer-h"},el("div",{},el("h2",{},title),sub?el("div",{class:"sub"},sub):null),
+    el("button",{class:"btn btn-q",style:"margin-left:auto",onclick:()=>close(),"aria-label":"Close"},"Close ✕"));
+  const body=el("div",{class:"drawer-b"});
+  const foot=el("div",{class:"drawer-f"});
+  d.append(head,body,foot);
+  document.body.append(scrim,d);
+  const onKey=e=>{if(e.key==="Escape")close();};
+  document.addEventListener("keydown",onKey);
+  function close(){ document.removeEventListener("keydown",onKey); scrim.remove(); d.remove(); closeDrawer=()=>{}; }
+  closeDrawer=close;
+  const api={body,foot,close,refresh(){body.innerHTML="";foot.innerHTML="";bodyFn(api);footFn&&footFn(api);}};
+  api.refresh();
+  setTimeout(()=>{const f=body.querySelector("input,select,textarea,button");f&&f.focus();},30);
+  return api;
+}
+function field(label,node,opts={}){
+  const l=el("label",{class:"f"+(opts.req?" req":"")},el("span",{},label),node);
+  if(opts.hint) l.appendChild(el("div",{class:"hint"},opts.hint));
+  if(opts.span) l.classList.add("span2");
+  return l;
+}
+function input(val,on,attrs={}){ return el("input",{value:val??"",oninput:e=>on(e.target.value),...attrs}); }
+function select(val,options,on,attrs={}){
+  return el("select",{onchange:e=>on(e.target.value),...attrs},
+    ...options.map(o=>{const [v,t]=Array.isArray(o)?o:[o,o];
+      return el("option",{value:v,selected:String(val)===String(v)?true:null},t);}));
+}
+function section(title,lane,...kids){ return el("div",{class:"fs "+(lane||"")},el("h4",{},title),...kids); }
+
+/* ================= VIEW: Setup ================= */
+function viewSetup(){
+  const s=S.settings, wrap=el("div",{});
+  wrap.appendChild(el("div",{class:"view-head"},el("div",{},el("h1",{},"Setup"),
+    el("p",{},"Set this once. Everything the Unicommerce bulk file writes comes from here."))));
+
+  const save=()=>{Store.saveSettings();};
+  wrap.appendChild(el("div",{class:"panel",style:"margin-bottom:16px"},
+    el("div",{class:"panel-h"},el("h3",{},"Unicommerce order defaults")),
+    el("div",{class:"panel-b"},
+      el("div",{class:"grid2"},
+        field("Channel code",input(s.channel,v=>{s.channel=v;save();}),{req:true,
+          hint:"The custom channel you created in UC for gifting orders."}),
+        field("Facility code",input(s.facility,v=>{s.facility=v;save();},{placeholder:"e.g. WH-MUM"}),
+          {hint:"Leave blank if your UC template does not carry it."}),
+        field("Order code prefix",input(s.orderPrefix,v=>{s.orderPrefix=v.toUpperCase();save();}),
+          {hint:"Codes come out as "+(s.orderPrefix||"PR")+"-YYMM-001."}),
+        field("Country",input(s.country,v=>{s.country=v;save();})),
+        field("Shipping charge per line",input(s.shippingCharge,v=>{s.shippingCharge=num(v);save();},{type:"number",min:"0"})),
+        field("Value treatment",select(s.gifting?"gift":"charge",[["gift","Gifting — MRP with 100% discount, net ₹0"],["charge","Charge MRP — net payable"]],
+          v=>{s.gifting=(v==="gift");save();}),{hint:"Gifting keeps the invoice value on the box while the order settles at zero."})))));
+
+  const cols=s.ucColumns||UC_DEFAULT_COLUMNS;
+  const mapBody=el("div",{});
+  const drawMap=()=>{
+    mapBody.innerHTML="";
+    mapBody.appendChild(el("div",{class:"mapgrid",style:"font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)"},
+      el("div",{},"Column header in your UC file"),el("div",{},"Filled with"),el("div",{})));
+    cols.forEach((c,i)=>{
+      mapBody.appendChild(el("div",{class:"mapgrid"},
+        input(c.header,v=>{c.header=v;},{ "aria-label":"Column "+(i+1)+" header"}),
+        select(c.field,UC_FIELDS,v=>{c.field=v;}),
+        el("button",{class:"btn btn-q btn-sm",title:"Remove column","aria-label":"Remove column "+(i+1),
+          onclick:()=>{cols.splice(i,1);drawMap();}},"✕")));
+    });
+    mapBody.appendChild(el("div",{style:"display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"},
+      el("button",{class:"btn btn-sm",onclick:()=>{cols.push({header:"",field:"blank"});drawMap();}},"+ Add column"),
+      el("button",{class:"btn btn-sm",onclick:()=>{s.ucColumns=UC_DEFAULT_COLUMNS.map(c=>({...c}));Store.saveSettings();}},"Reset to defaults"),
+      el("button",{class:"btn btn-sm btn-p",onclick:()=>{s.ucColumns=cols;Store.saveSettings();toast("Column mapping saved");}},"Save mapping")));
+  };
+  drawMap();
+  wrap.appendChild(el("div",{class:"panel",style:"margin-bottom:16px"},
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},"Unicommerce column mapping"),
+      el("div",{class:"sub"},cols.length+" columns · one row per item, orders with two SKUs write two rows sharing the order code")),
+      el("button",{class:"btn btn-sm",style:"margin-left:auto",onclick:openHeaderPaste},"Paste your UC header row"),
+      el("button",{class:"btn btn-sm",onclick:downloadBlankTemplate},"Download blank template")),
+    el("div",{class:"panel-b"},
+      el("div",{class:"callout"},el("b",{},"Match this to your own tenant. "),
+        "Download the sale-order import template from Unicommerce, copy its header row, and paste it above — the headers are taken exactly as they are and each one is matched to a field automatically. Anything it cannot guess is left blank for you to pick."),
+      mapBody)));
+
+  wrap.appendChild(el("div",{class:"panel"},
+    el("div",{class:"panel-h"},el("h3",{},"Board data")),
+    el("div",{class:"panel-b"},
+      el("div",{class:"grid2"},
+        el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"Storage"),
+          el("div",{class:"hint"},Store.mode==="live"
+            ? "Live — every change is stored and both teams see it within seconds."
+            : "This browser only. Open the published dashboard link for the shared, live board.")),
+        el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"Backup"),
+          el("button",{class:"btn btn-sm",onclick:exportBackup},"Download full backup (JSON)")),
+        hasSamples()?el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"Sample rows"),
+          el("button",{class:"btn btn-sm btn-danger",onclick:clearSamples},"Remove all sample data")):null,
+        !hasSamples()&&!collabList().length?el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"Sample rows"),
+          el("button",{class:"btn btn-sm",onclick:loadSamples},"Load sample board")):null))));
+  return wrap;
+}
+function exportBackup(){
+  saveFile("reel-to-doorstep-backup-"+todayISO()+".json",
+    JSON.stringify({exportedAt:new Date().toISOString(),settings:S.settings,
+      influencers:S.influencers,collabs:S.collabs,skus:S.skus},null,2));
+}
+function downloadBlankTemplate(){
+  const cols=S.settings.ucColumns||UC_DEFAULT_COLUMNS;
+  saveFile("unicommerce-bulk-order-template.csv","﻿"+cols.map(c=>csvCell(c.header)).join(",")+"\r\n");
+}
+function openHeaderPaste(){
+  let txt="";
+  const guess=h=>{
+    const k=h.toLowerCase().replace(/[^a-z0-9]/g,"");
+    const has=(...w)=>w.every(x=>k.includes(x));
+    if(has("saleorder","code")||k==="ordercode")return "order.code";
+    if(has("display"))return "order.displayCode";
+    if(has("order","date")||has("orderdatetime"))return "order.date";
+    if(k==="channel"||has("channel","code"))return "order.channel";
+    if(has("payment","method")||has("paymentmode"))return "order.payment";
+    if(has("cash","delivery")||k==="cod")return "order.cod";
+    if(has("customer","name"))return "cust.name";
+    if(has("customer","email"))return "cust.email";
+    if(has("customer","phone")||has("customer","mobile"))return "cust.phone";
+    const side=k.startsWith("shipping")||k.startsWith("ship")?"ship":(k.startsWith("billing")||k.startsWith("bill")?"bill":null);
+    if(side){
+      if(has("line1")||has("address1")||(k.includes("address")&&!k.includes("2")&&!has("city")&&!has("state")&&!has("pin")&&!has("country")))return side+".addr1";
+      if(has("line2")||has("address2"))return side+".addr2";
+      if(has("city"))return side+".city";
+      if(has("state"))return side+".state";
+      if(has("country"))return side+".country";
+      if(has("pin")||has("zip")||has("postal"))return side+".pin";
+      if(has("phone")||has("mobile"))return side+".phone";
+      if(has("name"))return side+".name";
+    }
+    if(has("sku"))return "item.sku";
+    if(has("quantity")||k==="qty")return "item.qty";
+    if(has("selling","price")||k==="price"||has("unitprice"))return "item.price";
+    if(has("discount"))return "item.discount";
+    if(has("shipping","charge"))return "item.ship";
+    if(has("total"))return "item.total";
+    if(has("facility"))return "facility.code";
+    if(has("note")||has("remark")||has("instruction"))return "notes";
+    return "blank";
+  };
+  drawer("Paste your Unicommerce header row",
+    "Open your UC sale-order import template, copy row 1, paste it here.",
+    api=>{
+      api.body.appendChild(el("div",{class:"callout"},"Paste the header row exactly — commas or tabs both work. Your headers are kept verbatim so UC accepts the file; only the mapping is guessed."));
+      api.body.appendChild(field("Header row",el("textarea",{rows:5,placeholder:"Sale Order Code,Display Order Code,Order Date,…",
+        oninput:e=>{txt=e.target.value;}})));
+    },
+    api=>{
+      api.foot.appendChild(el("button",{class:"btn btn-p",onclick:()=>{
+        const raw=txt.trim(); if(!raw){toast("Paste the header row first",true);return;}
+        const sep=raw.includes("\t")?"\t":",";
+        const heads=raw.split(/\r?\n/)[0].split(sep).map(h=>h.trim().replace(/^"|"$/g,"")).filter(Boolean);
+        if(heads.length<3){toast("That does not look like a header row",true);return;}
+        S.settings.ucColumns=heads.map(h=>({header:h,field:guess(h)}));
+        Store.saveSettings(); api.close();
+        toast(heads.length+" columns mapped — check the ones marked (leave blank)");
+      }},"Map these columns"));
+      api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Cancel"));
+    });
+}
+</script>
+<script>
+/* ================= collab drawer ================= */
+function blankCollab(){
+  return {influencerId:"",month:nowMonth(),platform:"Instagram",deliverable:"1 Reel",items:[],box:"PR Box",
+    ship:{name:"",phone:"",email:"",addr1:"",addr2:"",city:"",state:"",pin:""},
+    price:0,barter:false,payTerms:"100% post-live",payStatus:"Not Due",payDue:"",payDate:"",paid:0,
+    tnc:"Not Sent",tncDate:"",tncLink:"",shipStatus:"Draft",ucCode:"",courier:"",awb:"",
+    requestedAt:todayISO(),dispatchDate:"",deliveryDate:"",postDate:"",postLink:"",
+    views:0,likes:0,comments:0,shares:0,saves:0,reach:0,notes:"",owner:"Marketing",createdAt:todayISO()};
+}
+function shipFromInfluencer(i){
+  return {name:i.name||"",phone:i.phone||"",email:i.email||"",addr1:i.addr1||"",addr2:i.addr2||"",
+    city:i.city||"",state:i.state||"",pin:i.pin||""};
+}
+function repeatCollab(infId){
+  const i=S.influencers[infId]; if(!i) return;
+  const prev=collabList().filter(c=>c.influencerId===infId).sort((a,b)=>(b.requestedAt||"").localeCompare(a.requestedAt||""))[0];
+  const d=blankCollab();
+  d.influencerId=infId; d.ship=shipFromInfluencer(i); d.platform=i.platform||"Instagram";
+  if(prev){ d.items=(prev.items||[]).map(x=>({...x})); d.box=prev.box; d.deliverable=prev.deliverable;
+    d.payTerms=prev.payTerms; d.price=prev.price; }
+  openCollabDraft(d,null,"Repeat collab — "+i.name,
+    prev?"Address, products and terms carried over from "+dmy(prev.requestedAt):"Address carried over from the master");
+}
+function openCollab(id,focus){
+  const c=id?S.collabs[id]:null;
+  const d=c?JSON.parse(JSON.stringify(c)):blankCollab();
+  if(!d.ship) d.ship={};
+  openCollabDraft(d,id,id?((d.ship.name||"Collab")):"Lock an influencer",
+    id?("Raised "+dmy(d.requestedAt)+(d.ucCode?" · "+d.ucCode:"")):"Everything supply needs, captured once",focus);
+}
+function openCollabDraft(d,id,title,sub,focus){
+  let updateMaster=true;
+  const api=drawer(title,sub,body=>{},null);
+  const build=()=>{
+    api.body.innerHTML=""; api.foot.innerHTML="";
+    const inf=S.influencers[d.influencerId];
+
+    /* --- stage strip --- */
+    if(id||d.shipStatus!=="Draft"){
+      const strip=el("div",{class:"steps"});
+      const at=SHIP_FLOW.indexOf(d.shipStatus);
+      SHIP_FLOW.forEach((s,i)=>strip.appendChild(el("div",{class:"step "+(i===at?"on":i<at?"done":"")},s)));
+      api.body.appendChild(strip);
+    }
+
+    /* --- who --- */
+    const who=section("Influencer","lane-m");
+    if(inf){
+      who.appendChild(el("div",{style:"display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px"},
+        el("div",{},el("div",{style:"font-weight:700;font-size:15px"},inf.name),
+          el("div",{class:"t-sub mono"},"@"+(inf.handle||"—")+" · "+(inf.tier||"")+" · "+(inf.city||"")),
+          el("div",{class:"t-sub"},collabList().filter(c=>c.influencerId===inf.id&&c.id!==d.id).length+" earlier collabs on record")),
+        el("button",{class:"btn btn-sm",style:"margin-left:auto",onclick:()=>{d.influencerId="";build();}},"Change"),
+        el("button",{class:"btn btn-sm btn-q",onclick:()=>{d.ship=shipFromInfluencer(inf);build();toast("Saved address pulled in");}},"Pull saved address")));
+    } else {
+      let q="";
+      const results=el("div",{class:"pickbox"});
+      const draw=()=>{
+        results.innerHTML="";
+        const list=Object.values(S.influencers).filter(i=>!q||[i.name,i.handle,i.phone,i.city].join(" ").toLowerCase().includes(q.toLowerCase())).slice(0,40);
+        if(!list.length){ results.appendChild(el("div",{style:"padding:14px;color:var(--ink-3);font-size:12.5px"},
+          Object.keys(S.influencers).length?"No saved influencer matches — fill the details below and it gets saved automatically.":"No saved influencers yet — fill the details below.")); return; }
+        list.forEach(i=>results.appendChild(el("button",{class:"pickrow",onclick:()=>{
+            d.influencerId=i.id; d.ship=shipFromInfluencer(i); d.platform=i.platform||d.platform; build();
+            toast("Address pulled from the master");}},
+          el("div",{class:"who"},el("b",{},i.name),el("span",{},"@"+(i.handle||"—")+" · "+[i.city,i.state].filter(Boolean).join(", ")+" · "+phone10(i.phone))),
+          el("span",{class:"pill neutral plain"},collabList().filter(c=>c.influencerId===i.id).length+"x"))));
+      };
+      draw();
+      who.appendChild(field("Find a saved influencer",input("",v=>{q=v;draw();},{type:"search",placeholder:"Name, handle, mobile or city…"}),
+        {hint:"Pick one and the full shipping address fills itself — no asking on WhatsApp again."}));
+      who.appendChild(el("div",{style:"margin-top:8px"},results));
+      who.appendChild(el("div",{style:"height:12px"}));
+    }
+    who.appendChild(el("div",{class:"grid2"},
+      field("Name",input(d.ship.name,v=>{d.ship.name=v;}),{req:true}),
+      field("Instagram / YouTube handle",input((inf&&inf.handle)||d.handle||"",v=>{d.handle=cleanHandle(v);}),
+        {hint:inf?"Editing this updates the master.":"Without @"}),
+      field("Platform",select(d.platform,PLATFORMS,v=>{d.platform=v;})),
+      field("Tier",select((inf&&inf.tier)||d.tier||TIERS[1],TIERS,v=>{d.tier=v;})),
+      field("Category",select((inf&&inf.category)||d.category||CATEGORIES[0],CATEGORIES,v=>{d.category=v;}))));
+    api.body.appendChild(who);
+
+    /* --- deal --- */
+    api.body.appendChild(section("Commercials & paperwork","lane-m",
+      el("div",{class:"grid2"},
+        field("Campaign month",input(d.month,v=>{d.month=v;},{type:"month"}),{req:true}),
+        field("Deliverable",select(d.deliverable,DELIVERABLES,v=>{d.deliverable=v;})),
+        field("Locked price (₹)",input(d.price,v=>{d.price=num(v);},{type:"number",min:"0",disabled:d.barter?true:null}),
+          {hint:"Excl. GST, as agreed on mail"}),
+        el("label",{class:"f"},el("span",{},"Barter"),
+          el("div",{style:"display:flex;align-items:center;gap:8px;padding-top:7px"},
+            el("input",{type:"checkbox",style:"width:auto",checked:d.barter?true:null,
+              onchange:e=>{d.barter=e.target.checked; if(d.barter){d.price=0;d.payStatus="Not Applicable (Barter)";} build();}}),
+            el("span",{style:"font-size:13px"},"Product only, no fee"))),
+        field("Payment terms",input(d.payTerms,v=>{d.payTerms=v;},{placeholder:"50% advance / 50% post-live"})),
+        field("Payment status",select(d.payStatus,PAY_STATES,v=>{d.payStatus=v;build();})),
+        field("Payment due date",input(d.payDue,v=>{d.payDue=v;},{type:"date"})),
+        field("Amount paid (₹)",input(d.paid,v=>{d.paid=num(v);},{type:"number",min:"0"})),
+        field("Paid on",input(d.payDate,v=>{d.payDate=v;},{type:"date"})),
+        field("T&C confirmed on mail",select(d.tnc,TNC_STATES,v=>{d.tnc=v; if(v==="Confirmed"&&!d.tncDate)d.tncDate=todayISO(); build();})),
+        field("T&C date",input(d.tncDate,v=>{d.tncDate=v;},{type:"date"})),
+        field("Mail thread link",input(d.tncLink,v=>{d.tncLink=v;},{placeholder:"Paste the Gmail link"}),{span:true}))));
+
+    /* --- shipment --- */
+    const ship=section("What ships, and where","lane-s");
+    ship.appendChild(el("div",{class:"grid2"},
+      field("Box type",select(d.box,BOXES,v=>{d.box=v;}),{hint:"PR Box goes with the printed sleeve and note card."}),
+      field("Shipment stage",select(d.shipStatus,SHIP_ALL,v=>{d.shipStatus=v;
+        if(v==="Dispatched"&&!d.dispatchDate)d.dispatchDate=todayISO();
+        if(v==="Delivered"&&!d.deliveryDate)d.deliveryDate=todayISO(); build();}))));
+    const items=el("div",{style:"margin:12px 0"});
+    items.appendChild(el("div",{style:"font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px"},"Products to ship *"));
+    const skuList=Object.values(S.skus).filter(s=>s.active!==false);
+    (d.items||[]).forEach((it,i)=>{
+      const row=el("div",{class:"itemrow"});
+      if(skuList.length){
+        row.appendChild(select(it.sku,[["","Choose a SKU…"],...skuList.map(s=>[s.code,s.code+" — "+s.name])],v=>{
+          const s=skuList.find(x=>x.code===v); it.sku=v; it.name=s?s.name:""; it.mrp=s?s.mrp:0;},{"aria-label":"SKU line "+(i+1)}));
+      } else {
+        row.appendChild(input(it.sku,v=>{it.sku=v.trim();},{placeholder:"SKU code",  "aria-label":"SKU line "+(i+1)}));
+      }
+      row.appendChild(input(it.qty,v=>{it.qty=Math.max(1,num(v));},{type:"number",min:"1","aria-label":"Quantity line "+(i+1)}));
+      row.appendChild(el("button",{class:"btn btn-q btn-sm","aria-label":"Remove line "+(i+1),
+        onclick:()=>{d.items.splice(i,1);build();}},"✕"));
+      items.appendChild(row);
+    });
+    items.appendChild(el("div",{style:"display:flex;gap:8px;align-items:center;flex-wrap:wrap"},
+      el("button",{class:"btn btn-sm",onclick:()=>{d.items=d.items||[];d.items.push({sku:"",name:"",qty:1,mrp:0});build();}},"+ Add product"),
+      !skuList.length?el("span",{class:"hint"},"Tip: load your SKU master under Products so codes can never be mistyped."):null,
+      orderValue(d)?el("span",{class:"hint"},"Box value "+inr(orderValue(d))+" at MRP"):null));
+    ship.appendChild(items);
+
+    const probs=collabProblems(d), pmap={}; probs.forEach(([k,m])=>{ (pmap[k]=pmap[k]||[]).push(m); });
+    const addrField=(label,key,node,opts={})=>{
+      const f=field(label,node,opts);
+      if(pmap[key]){ node.classList.add("bad"); f.appendChild(el("div",{class:"err"},pmap[key][0])); }
+      return f;
+    };
+    ship.appendChild(el("div",{class:"grid2"},
+      addrField("Consignee name","name",input(d.ship.name,v=>{d.ship.name=v;}),{req:true}),
+      addrField("Mobile","phone",input(d.ship.phone,v=>{d.ship.phone=v;},{inputmode:"numeric",maxlength:"15",placeholder:"10 digits"}),{req:true}),
+      field("Email",input(d.ship.email,v=>{d.ship.email=v;},{type:"email"})),
+      addrField("Address line 1","addr1",input(d.ship.addr1,v=>{d.ship.addr1=v;},{placeholder:"Flat / building / street"}),{req:true,span:true}),
+      field("Address line 2 / landmark",input(d.ship.addr2,v=>{d.ship.addr2=v;}),{span:true}),
+      addrField("Pincode","pin",input(d.ship.pin,v=>{d.ship.pin=digits(v).slice(0,6);},{inputmode:"numeric",maxlength:"6"}),{req:true}),
+      addrField("City","city",input(d.ship.city,v=>{d.ship.city=v;}),{req:true}),
+      addrField("State","state",select(d.ship.state,[["","Choose the state…"],...STATES],v=>{d.ship.state=v;}),
+        {req:true,hint:"Must match UC's spelling — that is why this is a list.",span:true})));
+    if(d.influencerId) ship.appendChild(el("label",{style:"display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--ink-2)"},
+      el("input",{type:"checkbox",style:"width:auto",checked:updateMaster?true:null,onchange:e=>{updateMaster=e.target.checked;}}),
+      "Also update this address in the influencer master"));
+    ship.appendChild(el("div",{class:"grid2",style:"margin-top:12px"},
+      field("UC sale order code",input(d.ucCode,v=>{d.ucCode=v.trim();},{placeholder:"Filled by the bulk file"})),
+      field("Courier",input(d.courier,v=>{d.courier=v;},{placeholder:"Delhivery / Bluedart"})),
+      field("AWB / tracking",input(d.awb,v=>{d.awb=v.trim();})),
+      field("Raised on",input(d.requestedAt,v=>{d.requestedAt=v;},{type:"date"})),
+      field("Dispatched on",input(d.dispatchDate,v=>{d.dispatchDate=v;},{type:"date"})),
+      field("Delivered on",input(d.deliveryDate,v=>{d.deliveryDate=v;},{type:"date"}))));
+    api.body.appendChild(ship);
+
+    /* --- metrics --- */
+    const met=section("Reel performance","lane-m",
+      el("div",{class:"grid2"},
+        field("Posted on",input(d.postDate,v=>{d.postDate=v;},{type:"date"})),
+        field("Post link",input(d.postLink,v=>{d.postLink=v;},{placeholder:"https://instagram.com/reel/…"}))),
+      el("div",{class:"grid3",style:"margin-top:12px"},
+        field("Views",input(d.views,v=>{d.views=num(v);},{type:"number",min:"0"})),
+        field("Reach",input(d.reach,v=>{d.reach=num(v);},{type:"number",min:"0"})),
+        field("Likes",input(d.likes,v=>{d.likes=num(v);},{type:"number",min:"0"})),
+        field("Comments",input(d.comments,v=>{d.comments=num(v);},{type:"number",min:"0"})),
+        field("Shares",input(d.shares,v=>{d.shares=num(v);},{type:"number",min:"0"})),
+        field("Saves",input(d.saves,v=>{d.saves=num(v);},{type:"number",min:"0"}))));
+    if(num(d.views)) met.appendChild(el("div",{class:"callout",style:"margin:12px 0 0"},
+      el("b",{},erOf(d).toFixed(1)+"% ER"),"  ·  ",el("b",{},"₹"+cpvOf(d).toFixed(2)+" per view"),
+      "  ·  ",el("b",{},"₹"+cpeOf(d).toFixed(2)+" per engagement"),"  ·  ",compact(engagements(d))+" total engagements"));
+    api.body.appendChild(met);
+    api.body.appendChild(section("Notes for the packing team","",
+      el("textarea",{rows:3,placeholder:"Handwritten note, shade preference, delivery window…",
+        oninput:e=>{d.notes=e.target.value;}},d.notes||"")));
+
+    /* --- footer --- */
+    api.foot.appendChild(el("button",{class:"btn btn-p",onclick:()=>saveCollab()},id?"Save changes":"Lock it in"));
+    if(d.shipStatus==="Draft") api.foot.appendChild(el("button",{class:"btn btn-s",onclick:()=>saveCollab("Ready to Ship")},"Save & send to supply →"));
+    api.foot.appendChild(el("button",{class:"btn",onclick:()=>copyText(briefText({...d,id:d.id||"new"}))},"Copy brief"));
+    if(probs.length) api.foot.appendChild(el("span",{class:"hint",style:"color:var(--crit);font-weight:600"},
+      probs.length+" thing"+(probs.length>1?"s":"")+" to fix before it can go to UC"));
+    api.foot.appendChild(el("span",{style:"flex:1"}));
+    if(id) api.foot.appendChild(el("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
+      if(confirm("Delete this collab permanently?")){ await Store.remove("collabs",id); api.close(); toast("Deleted"); }}},"Delete"));
+
+    if(focus==="metrics"){ setTimeout(()=>{met.scrollIntoView({block:"center"});const f=met.querySelector("input");f&&f.focus();},40); focus=null; }
+  };
+
+  async function saveCollab(forceStatus){
+    if(!String(d.ship.name||"").trim()){ toast("A consignee name is needed",true); return; }
+    if(forceStatus){
+      const p=collabProblems(d);
+      if(p.length){ toast("Fix "+p.length+" address/product field"+(p.length>1?"s":"")+" before supply can ship it",true); build(); return; }
+      d.shipStatus=forceStatus;
+    }
+    let inf=S.influencers[d.influencerId];
+    if(!inf){
+      const handle=cleanHandle(d.handle||"");
+      const dup=Object.values(S.influencers).find(i=>(handle&&cleanHandle(i.handle)===handle)||
+        (phone10(d.ship.phone).length===10&&phone10(i.phone)===phone10(d.ship.phone)));
+      if(dup && !confirm(dup.name+" is already in the master with the same handle or mobile.\n\nOK = attach this collab to them.\nCancel = go back and pick manually.")){ return; }
+      if(dup){ inf=dup; }
+      else {
+        inf={id:uid("inf"),name:titleCase(d.ship.name),handle,platform:d.platform,phone:phone10(d.ship.phone),
+          email:d.ship.email||"",addr1:d.ship.addr1,addr2:d.ship.addr2,city:d.ship.city,state:d.ship.state,pin:digits(d.ship.pin),
+          tier:d.tier||TIERS[1],category:d.category||CATEGORIES[0],notes:"",createdAt:todayISO()};
+      }
+      await Store.put("influencers",inf); d.influencerId=inf.id;
+    } else if(updateMaster){
+      await Store.put("influencers",{...inf,name:titleCase(d.ship.name)||inf.name,
+        handle:d.handle!==undefined?cleanHandle(d.handle):inf.handle,
+        platform:d.platform,tier:d.tier||inf.tier,category:d.category||inf.category,
+        phone:phone10(d.ship.phone)||inf.phone,email:d.ship.email||inf.email,
+        addr1:d.ship.addr1,addr2:d.ship.addr2,city:d.ship.city,state:d.ship.state,pin:digits(d.ship.pin)});
+    }
+    delete d.handle; delete d.tier; delete d.category;
+    if(id) d.id=id;
+    await Store.put("collabs",d);
+    api.close();
+    toast(forceStatus?"Sent to the ship queue":"Saved");
+  }
+  build();
+}
+</script>
+<script>
+/* ================= influencer + SKU drawers ================= */
+function openInfluencer(id){
+  const i=id?{...S.influencers[id]}:{id:"",name:"",handle:"",platform:"Instagram",phone:"",email:"",
+    addr1:"",addr2:"",city:"",state:"",pin:"",tier:TIERS[1],category:CATEGORIES[0],notes:"",createdAt:todayISO()};
+  const api=drawer(id?i.name:"Add influencer",id?"@"+(i.handle||"")+" · "+collabList().filter(c=>c.influencerId===id).length+" collabs":"Saved once, reused on every repeat",()=>{});
+  const build=()=>{
+    api.body.innerHTML=""; api.foot.innerHTML="";
+    api.body.appendChild(section("Identity","lane-m",el("div",{class:"grid2"},
+      field("Name",input(i.name,v=>{i.name=v;}),{req:true}),
+      field("Handle",input(i.handle,v=>{i.handle=cleanHandle(v);}),{hint:"Without @"}),
+      field("Platform",select(i.platform,PLATFORMS,v=>{i.platform=v;})),
+      field("Tier",select(i.tier,TIERS,v=>{i.tier=v;})),
+      field("Category",select(i.category,CATEGORIES,v=>{i.category=v;})),
+      field("Email",input(i.email,v=>{i.email=v;},{type:"email"})))));
+    const probs={}; addressProblems({name:i.name,phone:i.phone,addr1:i.addr1,city:i.city,state:i.state,pin:i.pin})
+      .forEach(([k,m])=>{probs[k]=probs[k]||m;});
+    const af=(label,key,node,opts={})=>{const f=field(label,node,opts);
+      if(probs[key]){node.classList.add("bad");f.appendChild(el("div",{class:"err"},probs[key]));} return f;};
+    api.body.appendChild(section("Shipping address","lane-s",
+      el("div",{class:"callout"},"This is what fills the bulk file every time you repeat this influencer. Get it right once."),
+      el("div",{class:"grid2"},
+        af("Mobile","phone",input(i.phone,v=>{i.phone=v;},{inputmode:"numeric"}),{req:true}),
+        field("Alternate mobile",input(i.altPhone,v=>{i.altPhone=v;})),
+        af("Address line 1","addr1",input(i.addr1,v=>{i.addr1=v;}),{req:true,span:true}),
+        field("Address line 2 / landmark",input(i.addr2,v=>{i.addr2=v;}),{span:true}),
+        af("Pincode","pin",input(i.pin,v=>{i.pin=digits(v).slice(0,6);},{inputmode:"numeric",maxlength:"6"}),{req:true}),
+        af("City","city",input(i.city,v=>{i.city=v;}),{req:true}),
+        af("State","state",select(i.state,[["","Choose the state…"],...STATES],v=>{i.state=v;}),{req:true,span:true}))));
+    api.body.appendChild(section("Notes","",el("textarea",{rows:3,placeholder:"Preferred products, past performance, agency contact…",
+      oninput:e=>{i.notes=e.target.value;}},i.notes||"")));
+    if(id){
+      const cs=collabList().filter(c=>c.influencerId===id).sort((a,b)=>(b.requestedAt||"").localeCompare(a.requestedAt||""));
+      if(cs.length){
+        const tb=el("tbody",{});
+        cs.forEach(c=>tb.appendChild(el("tr",{},
+          el("td",{},monthLabel(c.month)),el("td",{},c.deliverable),
+          el("td",{class:"num"},c.barter?"barter":inr(c.price)),
+          el("td",{},statusPill(c)),
+          el("td",{class:"num"},num(c.views)?compact(c.views):"—"),
+          el("td",{},el("button",{class:"btn btn-q btn-sm",onclick:()=>{api.close();openCollab(c.id);}},"Open")))));
+        api.body.appendChild(section("Collab history","",el("div",{class:"tw"},el("table",{},
+          el("thead",{},el("tr",{},el("th",{},"Month"),el("th",{},"Deliverable"),el("th",{class:"num"},"Fee"),
+            el("th",{},"Shipment"),el("th",{class:"num"},"Views"),el("th",{},""))),tb))));
+      }
+    }
+    api.foot.appendChild(el("button",{class:"btn btn-p",onclick:async()=>{
+      if(!String(i.name).trim()){toast("Name is needed",true);return;}
+      i.name=titleCase(i.name); i.phone=phone10(i.phone); i.pin=digits(i.pin);
+      await Store.put("influencers",i); api.close(); toast("Saved");}},"Save"));
+    if(id) api.foot.appendChild(el("button",{class:"btn btn-s",onclick:()=>{api.close();repeatCollab(id);}},"Start a repeat collab →"));
+    api.foot.appendChild(el("span",{style:"flex:1"}));
+    if(id) api.foot.appendChild(el("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
+      const n=collabList().filter(c=>c.influencerId===id).length;
+      if(confirm(n?("This influencer has "+n+" collabs. Delete the master record anyway?"):"Delete this influencer?")){
+        await Store.remove("influencers",id); api.close(); toast("Deleted"); }}},"Delete"));
+  };
+  build();
+}
+function openSku(id){
+  const s=id?{...S.skus[id]}:{id:"",code:"",name:"",mrp:0,active:true,createdAt:todayISO()};
+  const api=drawer(id?s.code:"Add SKU",id?s.name:"Exactly as it reads in Unicommerce",()=>{});
+  api.body.appendChild(el("div",{class:"grid2"},
+    field("SKU code",input(s.code,v=>{s.code=v.trim();}),{req:true,hint:"Copy-paste from UC — a typed code fails the upload."}),
+    field("Product name",input(s.name,v=>{s.name=v;}),{req:true}),
+    field("MRP (₹)",input(s.mrp,v=>{s.mrp=num(v);},{type:"number",min:"0"})),
+    field("Status",select(s.active===false?"0":"1",[["1","Active"],["0","Inactive"]],v=>{s.active=v==="1";}))));
+  api.foot.appendChild(el("button",{class:"btn btn-p",onclick:async()=>{
+    if(!s.code.trim()){toast("SKU code is needed",true);return;}
+    await Store.put("skus",s); api.close(); toast("Saved");}},"Save"));
+  api.foot.appendChild(el("span",{style:"flex:1"}));
+  if(id) api.foot.appendChild(el("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
+    if(confirm("Delete this SKU?")){await Store.remove("skus",id);api.close();}}},"Delete"));
+}
+function openSkuImport(){
+  let txt="";
+  const api=drawer("Paste your SKU list","One per line: code, product name, MRP",()=>{});
+  api.body.appendChild(el("div",{class:"callout"},"Export the item master from Unicommerce (or copy the columns out of Excel) and paste here. Commas or tabs both work. Existing codes are updated, not duplicated."));
+  api.body.appendChild(field("SKU rows",el("textarea",{rows:12,
+    placeholder:"ARV-CBS-100, Coffee Body Scrub 100g, 399\nARV-VCS-30, Vitamin C Face Serum 30ml, 599",
+    oninput:e=>{txt=e.target.value;}})));
+  api.foot.appendChild(el("button",{class:"btn btn-p",onclick:async()=>{
+    const lines=txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    if(!lines.length){toast("Nothing pasted",true);return;}
+    let added=0,updated=0;
+    for(const line of lines){
+      const sep=line.includes("\t")?"\t":",";
+      const p=line.split(sep).map(x=>x.trim().replace(/^"|"$/g,""));
+      const code=p[0]; if(!code||/^sku/i.test(code)&&/name/i.test(p[1]||"")) continue;
+      const found=Object.values(S.skus).find(s=>s.code.toLowerCase()===code.toLowerCase());
+      if(found){ await Store.put("skus",{...found,name:p[1]||found.name,mrp:p[2]!==undefined?num(p[2]):found.mrp}); updated++; }
+      else { await Store.put("skus",{id:uid("sku"),code,name:p[1]||code,mrp:num(p[2]),active:true,createdAt:todayISO()}); added++; }
+    }
+    api.close(); toast(added+" added, "+updated+" updated");
+  }},"Import SKUs"));
+  api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Cancel"));
+}
+</script>
+<script>
+/* ================= bulk build + paste back ================= */
+function openBulkBuild(){
+  const chosen = UI.sel.size
+    ? [...UI.sel].map(id=>S.collabs[id]).filter(Boolean)
+    : collabList().filter(c=>c.shipStatus==="Ready to Ship");
+  const clean = chosen.filter(c=>!collabProblems(c).length);
+  const blocked = chosen.filter(c=>collabProblems(c).length);
+  const api=drawer("Unicommerce bulk file","One row per item · "+(S.settings.ucColumns||[]).length+" columns",()=>{});
+
+  if(!clean.length){
+    api.body.appendChild(el("div",{class:"callout crit"},el("b",{},"Nothing is ready to upload. "),
+      chosen.length?"Every selected row still has an address or SKU problem.":"Move rows to “Ready to ship” first."));
+    blocked.forEach(c=>api.body.appendChild(el("div",{class:"panel",style:"margin-bottom:8px"},
+      el("div",{class:"panel-b"},el("b",{},(c.ship||{}).name||"—"),
+        el("ul",{style:"margin:6px 0 0 18px;color:var(--crit);font-size:12.5px"},
+          ...collabProblems(c).map(p=>el("li",{},p[1])))))));
+    api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
+    return;
+  }
+
+  const {csv,assigned}=buildUCFile(clean);
+  const lines = clean.reduce((s,c)=>s+(c.items||[]).length,0);
+  api.body.appendChild(el("div",{class:"callout"},
+    el("b",{},clean.length+" orders · "+lines+" item rows. "),
+    "Download it, open Unicommerce → Orders → Import, pick your sale-order template and upload. Order codes below are written back here so tracking matches later."));
+  if(blocked.length) api.body.appendChild(el("div",{class:"callout crit"},
+    el("b",{},blocked.length+" row"+(blocked.length>1?"s":"")+" left out — "),"address or SKU incomplete. Fix them and build again."));
+
+  const tb=el("tbody",{});
+  assigned.forEach(({collab:c,code,reused})=>{
+    tb.appendChild(el("tr",{},
+      el("td",{class:"mono"},code,reused?el("span",{class:"tag",style:"margin-left:6px"},"existing"):null),
+      el("td",{},(c.ship||{}).name,el("div",{class:"t-sub mono"},(c.ship||{}).city+" · "+digits((c.ship||{}).pin))),
+      el("td",{class:"mono"},(c.items||[]).map(i=>i.sku+"×"+i.qty).join(", ")),
+      el("td",{},el("span",{class:"tag "+(c.box==="PR Box"?"pr":"")},c.box))));
+  });
+  api.body.appendChild(el("div",{class:"panel",style:"margin-bottom:14px"},el("div",{class:"tw"},el("table",{},
+    el("thead",{},el("tr",{},el("th",{},"Order code"),el("th",{},"Ship to"),el("th",{},"Items"),el("th",{},"Box"))),tb))));
+
+  api.body.appendChild(field("File preview",el("textarea",{rows:8,readonly:true,"aria-label":"CSV preview"},
+    csv.replace(/^﻿/,"").split("\r\n").slice(0,6).join("\n")+(lines>5?"\n… "+lines+" item rows in total":"")),
+    {hint:"Saved as UTF-8 with a byte-order mark and CRLF line endings, which is what Excel and UC both expect."}));
+
+  const applyCodes=async()=>{
+    for(const {collab:c,code} of assigned)
+      await Store.put("collabs",{...S.collabs[c.id],ucCode:code,shipStatus:"Order Created"});
+    UI.sel.clear();
+  };
+  api.foot.appendChild(el("button",{class:"btn btn-s",onclick:async()=>{
+    const ok=await saveFile("uc-bulk-orders-"+todayISO()+".csv",csv);
+    if(ok){ await applyCodes(); api.close(); toast(clean.length+" orders moved to “Order created”"); }
+  }},"Download & mark as created in UC"));
+  api.foot.appendChild(el("button",{class:"btn",onclick:()=>copyText(csv.replace(/^﻿/,""))},"Copy file text"));
+  api.foot.appendChild(el("span",{style:"flex:1"}));
+  api.foot.appendChild(el("button",{class:"btn btn-q btn-sm",onclick:api.close},"Cancel"));
+}
+
+function openPasteBack(){
+  let txt="", parsed=[];
+  const api=drawer("Paste dispatch details back",
+    "Export dispatched orders from UC, paste the rows — order code, AWB, courier, date.",()=>{});
+  const preview=el("div",{});
+  const parse=()=>{
+    parsed=[];
+    txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).forEach(line=>{
+      const sep=line.includes("\t")?"\t":",";
+      const p=line.split(sep).map(x=>x.trim().replace(/^"|"$/g,""));
+      if(!p[0]||/sale\s*order|order\s*code/i.test(p[0])) return;
+      const key=p[0].toLowerCase();
+      const c=collabList().find(x=>(x.ucCode||"").toLowerCase()===key)
+           || collabList().find(x=>(x.awb||"").toLowerCase()===key);
+      const dateRaw=p.find(x=>/^\d{2}[\/\-]\d{2}[\/\-]\d{2,4}/.test(x)||/^\d{4}-\d{2}-\d{2}/.test(x));
+      parsed.push({code:p[0],awb:p[1]||"",courier:p[2]||"",date:normDate(dateRaw),collab:c||null});
+    });
+    preview.innerHTML="";
+    if(!parsed.length){ preview.appendChild(el("div",{class:"hint"},"Nothing parsed yet.")); return; }
+    const hit=parsed.filter(r=>r.collab).length;
+    preview.appendChild(el("div",{class:"callout"+(hit?"":" crit")},
+      el("b",{},hit+" of "+parsed.length+" rows matched. "),
+      hit<parsed.length?"Unmatched rows are ignored — check the order code column is first.":"Applying will mark them Dispatched."));
+    const tb=el("tbody",{});
+    parsed.forEach(r=>tb.appendChild(el("tr",{},
+      el("td",{class:"mono"},r.code),
+      el("td",{},r.collab?((r.collab.ship||{}).name):pill("no match","crit")),
+      el("td",{class:"mono"},r.awb||"—"),
+      el("td",{},r.courier||"—"),
+      el("td",{class:"mono"},r.date?dmy(r.date):"—"))));
+    preview.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
+      el("thead",{},el("tr",{},el("th",{},"Order code"),el("th",{},"Matched to"),el("th",{},"AWB"),
+        el("th",{},"Courier"),el("th",{},"Dispatched"))),tb))));
+  };
+  api.body.appendChild(el("div",{class:"callout"},"Column order expected: ",
+    el("b",{},"sale order code · AWB · courier · dispatch date"),". Extra columns are ignored, so a raw UC export usually pastes straight in."));
+  api.body.appendChild(field("Dispatch rows",el("textarea",{rows:9,
+    placeholder:"PR-2602-004\t1489328891140\tDelhivery\t14/02/2026",
+    oninput:e=>{txt=e.target.value;parse();}})));
+  api.body.appendChild(preview); parse();
+  api.foot.appendChild(el("button",{class:"btn btn-s",onclick:async()=>{
+    const rows=parsed.filter(r=>r.collab);
+    if(!rows.length){toast("No rows matched an order code",true);return;}
+    for(const r of rows){
+      const c=S.collabs[r.collab.id]; if(!c) continue;
+      await Store.put("collabs",{...c,awb:r.awb||c.awb,courier:r.courier||c.courier,
+        dispatchDate:r.date||c.dispatchDate||todayISO(),
+        shipStatus:c.shipStatus==="Delivered"?"Delivered":"Dispatched"});
+    }
+    api.close(); toast(rows.length+" shipments updated");
+  }},"Apply to "+"matched rows"));
+  api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Cancel"));
+}
+function normDate(s){
+  if(!s) return "";
+  s=String(s).trim();
+  let m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return m[0];
+  m=/^(\d{2})[\/\-](\d{2})[\/\-](\d{2,4})/.exec(s);
+  if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; return y+"-"+m[2]+"-"+m[1]; }
+  return "";
+}
+
+/* ================= boot ================= */
+(async function boot(){
+  $("#view").appendChild(el("div",{class:"empty"},el("h4",{},"Loading the board…"),
+    el("p",{},"Fetching collabs, influencers and your Unicommerce settings.")));
+  await Store.init();
+  if(!Object.keys(S.collabs).length && !Object.keys(S.influencers).length){
+    await loadSamples();
+  }
+  render();
+})();
+</script>
