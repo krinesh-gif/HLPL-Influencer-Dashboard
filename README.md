@@ -29,25 +29,35 @@ retypes an address, a SKU or a tracking number.
 
 ## The Unicommerce bulk file
 
-`templates/unicommerce-bulk-order-template.csv` — headers only.
-`templates/unicommerce-bulk-order-sample.csv` — one two-line order, filled in.
+`templates/unicommerce-bulk-order-template.csv` — the real 73-column sale-order
+import header, headers verbatim including the `*` on mandatory columns.
+`templates/unicommerce-bulk-order-sample.csv` — two orders, one of them with two SKUs.
 
-Rules the generator follows:
+The five mandatory columns are always filled:
 
-- **One row per item.** An order with two SKUs writes two rows that share the same
-  Sale Order Code — that is how UC groups them into a single order.
-- **Order codes** come out as `PR-YYMM-001` and are written back onto the collab row,
-  so the AWB you paste back later lands on the right influencer.
-- **Gifting treatment** (Setup): selling price = MRP and discount = MRP, so the box
-  carries its real value on the invoice while the order settles at ₹0. Switch to
+| Column | Filled with |
+|---|---|
+| `Sales Order Code*` | `PR-YYMM-001`, written back onto the collab row |
+| `COD*` | `0` — every gifting order is prepaid |
+| `Sale Order Item Code*` | the order code plus the line number, e.g. `PR-2609-001-2` |
+| `Shipping Method*` | the value set in Setup; the export is blocked while it is blank |
+| `Item SKU Code*` | picked from the SKU master, never typed |
+
+Other rules the generator follows:
+
+- **One row per item.** An order with two SKUs writes two rows sharing the same
+  Sales Order Code and carrying different Sale Order Item Codes.
+- **Gifting treatment** (Setup): Selling Price = MRP and Discount = MRP, so the box
+  carries its real value on the invoice while Prepaid Amount comes out ₹0. Switch to
   *Charge MRP* if you ever bill a shipment.
+- **Payment Mode** `PREPAID`, **Currency Code** `INR`, both settable in Setup.
+- **Item Tag** carries the box type, the deliverable and the creator's handle, so the
+  packing team can see what it is without opening the dashboard.
 - **State names come from a dropdown**, pincodes are forced to 6 digits and mobiles to
   10 — the three things that make UC reject a bulk file.
 
-> The default column set follows the standard Unicommerce sale-order import layout, but
-> the exact template differs by tenant. Download your own template from
-> Unicommerce, copy row 1, and paste it into **Setup → Paste your UC header row**.
-> Your headers are kept verbatim and each one is matched to a field automatically.
+Columns are remappable under **Setup → Unicommerce column mapping** if your template
+changes; **Reset to the UC template** puts back the 73 columns above.
 
 ## Running it
 

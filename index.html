@@ -266,7 +266,10 @@ const UC_FIELDS = [
   ["order.date","Order date/time"],
   ["order.channel","Channel code"],
   ["order.payment","Payment method (PREPAID/COD)"],
-  ["order.cod","Cash on delivery (Yes/No)"],
+  ["order.paymentMode","Payment mode (PREPAID)"],
+  ["order.cod","COD flag (1 = COD, 0 = prepaid)"],
+  ["order.shipMethod","Shipping method code"],
+  ["order.currency","Currency code (INR)"],
   ["cust.name","Customer name"],["cust.email","Customer email"],["cust.phone","Customer phone"],
   ["ship.name","Shipping name"],["ship.addr1","Shipping address line 1"],["ship.addr2","Shipping address line 2"],
   ["ship.city","Shipping city"],["ship.state","Shipping state"],["ship.country","Shipping country"],
@@ -274,29 +277,94 @@ const UC_FIELDS = [
   ["bill.name","Billing name"],["bill.addr1","Billing address line 1"],["bill.addr2","Billing address line 2"],
   ["bill.city","Billing city"],["bill.state","Billing state"],["bill.country","Billing country"],
   ["bill.pin","Billing pincode"],["bill.phone","Billing phone"],
-  ["item.sku","Item SKU code"],["item.qty","Item quantity"],["item.price","Item selling price"],
+  ["item.code","Sale order item code (order code + line no.)"],
+  ["item.sku","Item SKU code"],["item.name","Item name"],
+  ["item.qty","Item quantity"],["item.price","Item selling price"],
   ["item.discount","Item discount"],["item.ship","Item shipping charges"],["item.total","Item total (price-discount)"],
   ["facility.code","Facility code"],["notes","Notes / packing instruction"],["blank","(leave blank)"]
 ];
+const UC_TEMPLATE_VERSION = 2;
 const UC_DEFAULT_COLUMNS = [
-  ["Sale Order Code","order.code"],["Display Order Code","order.displayCode"],["Order Date","order.date"],
-  ["Channel","order.channel"],["Payment Method","order.payment"],["Cash On Delivery","order.cod"],
-  ["Customer Name","cust.name"],["Customer Email","cust.email"],["Customer Phone","cust.phone"],
-  ["Shipping Name","ship.name"],["Shipping Address Line 1","ship.addr1"],["Shipping Address Line 2","ship.addr2"],
-  ["Shipping City","ship.city"],["Shipping State","ship.state"],["Shipping Country","ship.country"],
-  ["Shipping Pincode","ship.pin"],["Shipping Phone","ship.phone"],
-  ["Billing Name","bill.name"],["Billing Address Line 1","bill.addr1"],["Billing Address Line 2","bill.addr2"],
-  ["Billing City","bill.city"],["Billing State","bill.state"],["Billing Country","bill.country"],
-  ["Billing Pincode","bill.pin"],["Billing Phone","bill.phone"],
-  ["Item SKU Code","item.sku"],["Item Quantity","item.qty"],["Item Selling Price","item.price"],
-  ["Item Discount","item.discount"],["Item Shipping Charges","item.ship"],
-  ["Facility Code","facility.code"],["Notes","notes"]
-].map(([header,field])=>({header,field}));
+  {header:"Sales Order Code*",field:"order.code"},
+  {header:"Display Sales Order Code",field:"order.displayCode"},
+  {header:"Notification Email",field:"cust.email"},
+  {header:"Notification Mobile",field:"cust.phone"},
+  {header:"COD*",field:"order.cod"},
+  {header:"Channel",field:"order.channel"},
+  {header:"Priority",field:"blank"},
+  {header:"Shipping Address Id",field:"blank"},
+  {header:"Shipping Address Name",field:"ship.name"},
+  {header:"Shipping Address Line 1",field:"ship.addr1"},
+  {header:"Shipping Address Line 2",field:"ship.addr2"},
+  {header:"Shipping Address City",field:"ship.city"},
+  {header:"Shipping Address State",field:"ship.state"},
+  {header:"Shipping Address Country",field:"ship.country"},
+  {header:"Shipping Address Pincode",field:"ship.pin"},
+  {header:"Shipping Address Latitude",field:"blank"},
+  {header:"Shipping Address Longitude",field:"blank"},
+  {header:"Shipping Address Phone",field:"ship.phone"},
+  {header:"Shipping Address GSTIN",field:"blank"},
+  {header:"Billing Address Id",field:"blank"},
+  {header:"Billing Address Name",field:"bill.name"},
+  {header:"Billing Address Line 1",field:"bill.addr1"},
+  {header:"Billing Address Line 2",field:"bill.addr2"},
+  {header:"Billing Address City",field:"bill.city"},
+  {header:"Billing Address State",field:"bill.state"},
+  {header:"Billing Address Country",field:"bill.country"},
+  {header:"Billing Address Pincode",field:"bill.pin"},
+  {header:"Billing Address Latitude",field:"blank"},
+  {header:"Billing Address Longitude",field:"blank"},
+  {header:"Billing Address Phone",field:"bill.phone"},
+  {header:"Billing Address GSTIN",field:"blank"},
+  {header:"Combination Identifier",field:"blank"},
+  {header:"Combination Description",field:"blank"},
+  {header:"Sale Order Item Code*",field:"item.code"},
+  {header:"Shipping Method*",field:"order.shipMethod"},
+  {header:"Item SKU Code*",field:"item.sku"},
+  {header:"Channel Product Id",field:"blank"},
+  {header:"Item Name",field:"item.name"},
+  {header:"Requires Customization",field:"blank"},
+  {header:"Gift Wrap",field:"blank"},
+  {header:"Gift Message",field:"blank"},
+  {header:"Selling Price",field:"item.price"},
+  {header:"Discount",field:"item.discount"},
+  {header:"Shipping Charges",field:"item.ship"},
+  {header:"Shipping Method Charges",field:"blank"},
+  {header:"COD Service Charges",field:"blank"},
+  {header:"Gift Wrap Charges",field:"blank"},
+  {header:"Voucher Code",field:"blank"},
+  {header:"Voucher Value",field:"blank"},
+  {header:"Store Credit",field:"blank"},
+  {header:"Packet Number",field:"blank"},
+  {header:"On Hold",field:"blank"},
+  {header:"Order Date as dd/mm/yyyy hh:MM:ss",field:"order.date"},
+  {header:"Channel Order Processing Date as dd/MM/yyyy hh:mm:ss",field:"blank"},
+  {header:"Shipping Provider",field:"blank"},
+  {header:"Tracking Number",field:"blank"},
+  {header:"Quantity",field:"item.qty"},
+  {header:"Quantity In Combo",field:"blank"},
+  {header:"Prepaid Amount",field:"item.total"},
+  {header:"Customer Code",field:"blank"},
+  {header:"Currency Code",field:"order.currency"},
+  {header:"Customer GSTIN",field:"blank"},
+  {header:"Order Total Shipping Charges",field:"blank"},
+  {header:"Fulfillment Tat",field:"blank"},
+  {header:"Shipping Package Type Code",field:"blank"},
+  {header:"Transaction Id",field:"blank"},
+  {header:"Transaction Date as dd/MM/yyyy hh:mm:ss",field:"blank"},
+  {header:"Amount Paid",field:"blank"},
+  {header:"Payment Mode",field:"order.paymentMode"},
+  {header:"Transaction Note",field:"blank"},
+  {header:"Facility Code",field:"facility.code"},
+  {header:"Parent Sale Order Code",field:"blank"},
+  {header:"Item Tag",field:"notes"}
+];
 
 const DEFAULT_SETTINGS = {
   channel:"PR_GIFTING", facility:"", country:"India", orderPrefix:"PR",
   gifting:true, shippingCharge:0, brand:"Aravi Organic",
-  ucColumns:UC_DEFAULT_COLUMNS
+  shipMethod:"STANDARD", currency:"INR",
+  ucColumns:UC_DEFAULT_COLUMNS, ucVersion:UC_TEMPLATE_VERSION
 };
 
 /* ---------------- tiny helpers ---------------- */
@@ -394,6 +462,13 @@ const Store = {
     } else {
       for(const c of ["influencers","collabs","skus"]) S[c]=this.readLocal(c);
       const cfg=this.readLocal("settings"); if(cfg && cfg.channel) S.settings={...DEFAULT_SETTINGS,...cfg};
+    }
+    if(num(S.settings.ucVersion)!==UC_TEMPLATE_VERSION){
+      S.settings.ucColumns=UC_DEFAULT_COLUMNS.map(c=>({...c}));
+      S.settings.ucVersion=UC_TEMPLATE_VERSION;
+      if(!S.settings.shipMethod) S.settings.shipMethod="STANDARD";
+      if(!S.settings.currency) S.settings.currency="INR";
+      this.saveSettings();
     }
     this.ready=true;
     setConn(this.mode, db?"Live · shared with your team":"Local to this browser");
@@ -530,14 +605,16 @@ function nextOrderCode(){
 
 /* ================= Unicommerce bulk file ================= */
 function ucValue(field,ctx){
-  const {c,item,code,st,s} = ctx;
+  const {c,item,code,st,s,line} = ctx;
+  if(String(field||"").startsWith("const:")) return String(field).slice(6);
   const gift = s.gifting;
   const price = gift ? num(item.mrp) : num(item.mrp);
   const disc  = gift ? num(item.mrp) : 0;
   const map = {
     "order.code":code, "order.displayCode":code,
     "order.date":new Date().toLocaleString("en-GB",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).replace(",",""),
-    "order.channel":s.channel, "order.payment":"PREPAID", "order.cod":"No",
+    "order.channel":s.channel, "order.payment":"PREPAID", "order.paymentMode":"PREPAID",
+    "order.cod":"0", "order.shipMethod":s.shipMethod||"STANDARD", "order.currency":s.currency||"INR",
     "cust.name":st.name, "cust.email":st.email||"", "cust.phone":phone10(st.phone),
     "ship.name":st.name, "ship.addr1":st.addr1, "ship.addr2":st.addr2||"",
     "ship.city":st.city, "ship.state":st.state, "ship.country":s.country,
@@ -545,7 +622,8 @@ function ucValue(field,ctx){
     "bill.name":st.name, "bill.addr1":st.addr1, "bill.addr2":st.addr2||"",
     "bill.city":st.city, "bill.state":st.state, "bill.country":s.country,
     "bill.pin":digits(st.pin), "bill.phone":phone10(st.phone),
-    "item.sku":item.sku, "item.qty":num(item.qty)||1,
+    "item.code":code+"-"+line, "item.sku":item.sku, "item.name":item.name||"",
+    "item.qty":num(item.qty)||1,
     "item.price":price, "item.discount":disc, "item.ship":num(s.shippingCharge),
     "item.total":Math.max(0,price-disc),
     "facility.code":s.facility||"",
@@ -565,8 +643,8 @@ function buildUCFile(collabs){
     const code = c.ucCode || gen(assigned.filter(a=>!a.reused).length+1);
     assigned.push({collab:c,code,reused:!!c.ucCode});
     const st = c.ship||{};
-    (c.items||[]).forEach(item=>{
-      rows.push(cols.map(col=>csvCell(ucValue(col.field,{c,item,code,st,s}))).join(","));
+    (c.items||[]).forEach((item,li)=>{
+      rows.push(cols.map(col=>csvCell(ucValue(col.field,{c,item,code,st,s,line:li+1}))).join(","));
     });
   });
   return {csv:"﻿"+rows.join("\r\n")+"\r\n", assigned};
@@ -1218,6 +1296,9 @@ function viewSetup(){
         field("Order code prefix",input(s.orderPrefix,v=>{s.orderPrefix=v.toUpperCase();save();}),
           {hint:"Codes come out as "+(s.orderPrefix||"PR")+"-YYMM-001."}),
         field("Country",input(s.country,v=>{s.country=v;save();})),
+        field("Shipping method",input(s.shipMethod,v=>{s.shipMethod=v.trim();save();},{placeholder:"STANDARD"}),
+          {req:true,hint:"Mandatory in UC. Must match a shipping method that exists in your tenant."}),
+        field("Currency code",input(s.currency,v=>{s.currency=v.trim().toUpperCase();save();},{placeholder:"INR"})),
         field("Shipping charge per line",input(s.shippingCharge,v=>{s.shippingCharge=num(v);save();},{type:"number",min:"0"})),
         field("Value treatment",select(s.gifting?"gift":"charge",[["gift","Gifting — MRP with 100% discount, net ₹0"],["charge","Charge MRP — net payable"]],
           v=>{s.gifting=(v==="gift");save();}),{hint:"Gifting keeps the invoice value on the box while the order settles at zero."})))));
@@ -1237,7 +1318,7 @@ function viewSetup(){
     });
     mapBody.appendChild(el("div",{style:"display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"},
       el("button",{class:"btn btn-sm",onclick:()=>{cols.push({header:"",field:"blank"});drawMap();}},"+ Add column"),
-      el("button",{class:"btn btn-sm",onclick:()=>{s.ucColumns=UC_DEFAULT_COLUMNS.map(c=>({...c}));Store.saveSettings();}},"Reset to defaults"),
+      el("button",{class:"btn btn-sm",onclick:()=>{s.ucColumns=UC_DEFAULT_COLUMNS.map(c=>({...c}));s.ucVersion=UC_TEMPLATE_VERSION;Store.saveSettings();toast("Reset to the Unicommerce sale-order template");}},"Reset to the UC template"),
       el("button",{class:"btn btn-sm btn-p",onclick:()=>{s.ucColumns=cols;Store.saveSettings();toast("Column mapping saved");}},"Save mapping")));
   };
   drawMap();
@@ -2386,11 +2467,19 @@ function openBulkBuild(){
     return;
   }
 
+  if(!String(S.settings.shipMethod||"").trim()){
+    api.body.appendChild(el("div",{class:"callout crit"},el("b",{},"Shipping Method is blank. "),
+      "UC rejects the file without it. Set it once under Setup \u2014 it is one of the five mandatory columns."));
+    api.foot.appendChild(el("button",{class:"btn btn-p",onclick:()=>{api.close();go("setup");}},"Open Setup"));
+    api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
+    return;
+  }
   const {csv,assigned}=buildUCFile(clean);
   const lines = clean.reduce((s,c)=>s+(c.items||[]).length,0);
   api.body.appendChild(el("div",{class:"callout"},
-    el("b",{},clean.length+" orders · "+lines+" item rows. "),
-    "Download it, open Unicommerce → Orders → Import, pick your sale-order template and upload. Order codes below are written back here so tracking matches later."));
+    el("b",{},clean.length+" orders · "+lines+" item rows across "+(S.settings.ucColumns||[]).length+" columns. "),
+    "All five mandatory columns are filled: sales order code, COD (0, prepaid), sale order item code, shipping method (",
+    el("b",{},S.settings.shipMethod),") and item SKU code. Upload it in Unicommerce → Orders → Import. The order codes below are written back here, so the tracking you paste later matches."));
   if(blocked.length) api.body.appendChild(el("div",{class:"callout crit"},
     el("b",{},blocked.length+" row"+(blocked.length>1?"s":"")+" left out — "),"address or SKU incomplete. Fix them and build again."));
 
