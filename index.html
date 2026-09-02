@@ -939,6 +939,7 @@ function viewPeople(){
     el("div",{},el("h1",{},"Influencer master"),
       el("p",{},"Saved once, reused forever. Repeat a collab and the address, pincode and mobile come along — nobody asks in the group again.")),
     el("div",{class:"head-actions"},
+      el("button",{class:"btn",onclick:()=>openAddressPaste({})},"Paste addresses"),
       Sampler?el("button",{class:"btn",onclick:()=>openScreen(null)},"Screen a creator with AI"):null,
       el("button",{class:"btn btn-p",onclick:()=>openInfluencer(null)},"+ Add influencer"))));
 
@@ -1491,6 +1492,13 @@ function openCollabDraft(d,id,title,sub,focus){
       addrField("City","city",input(d.ship.city,v=>{d.ship.city=v;}),{req:true}),
       addrField("State","state",select(d.ship.state,[["","Choose the state…"],...STATES],v=>{d.ship.state=v;}),
         {req:true,hint:"Must match UC's spelling — that is why this is a list.",span:true})));
+    ship.appendChild(el("div",{style:"margin-top:10px"},
+      el("button",{class:"btn btn-sm",onclick:()=>openAddressPaste({single:true,onPick:r=>{
+        d.ship={name:titleCase(r.name)||d.ship.name,phone:phone10(r.phone),email:r.email||d.ship.email,
+          addr1:r.addr1,addr2:r.addr2,city:titleCase(r.city),state:r.state,pin:digits(r.pin)};
+        build(); toast("Address split into fields — check it");}})},
+        "Paste what the creator sent"),
+      el("span",{class:"hint",style:"margin-left:8px"},"Splits a WhatsApp message into these fields")));
     if(d.influencerId) ship.appendChild(el("label",{style:"display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--ink-2)"},
       el("input",{type:"checkbox",style:"width:auto",checked:updateMaster?true:null,onchange:e=>{updateMaster=e.target.checked;}}),
       "Also update this address in the influencer master"));
@@ -1624,6 +1632,10 @@ function openInfluencer(id){
       await Store.put("influencers",i); api.close(); toast("Saved");}},"Save"));
     if(id) api.foot.appendChild(el("button",{class:"btn btn-s",onclick:()=>{api.close();repeatCollab(id);}},"Start a repeat collab →"));
     if(id&&Sampler) api.foot.appendChild(el("button",{class:"btn",onclick:()=>{api.close();openScreen(id);}},"Screen with AI"));
+    api.foot.appendChild(el("button",{class:"btn btn-sm",onclick:()=>openAddressPaste({single:true,onPick:r=>{
+      Object.assign(i,{name:titleCase(r.name)||i.name,phone:phone10(r.phone),email:r.email||i.email,
+        addr1:r.addr1,addr2:r.addr2,city:titleCase(r.city),state:r.state,pin:digits(r.pin)});
+      build(); toast("Address split into fields");}})},"Paste address"));
     api.foot.appendChild(el("span",{style:"flex:1"}));
     if(id) api.foot.appendChild(el("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
       const n=collabList().filter(c=>c.influencerId===id).length;
@@ -1671,6 +1683,332 @@ function openSkuImport(){
   api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Cancel"));
 }
 </script>
+<script>
+/* ================= raw address parser =================
+   Creators send addresses as free text. This splits one or many blobs
+   into name / mobile / email / line 1 / line 2 / city / state / pincode,
+   flags whatever it had to guess, and never silently invents a field. */
+
+const CITY_STATE={};
+(function(){
+  const add=(state,names)=>names.split(",").forEach(n=>{CITY_STATE[n.trim().toLowerCase()]=state;});
+  add("Maharashtra","Mumbai,Navi Mumbai,Thane,Pune,Nagpur,Nashik,Aurangabad,Solapur,Kolhapur,Amravati,Nanded,Sangli,Jalgaon,Akola,Latur,Ahmednagar,Chandrapur,Parbhani,Nandurbar,Dhule,Satara,Ratnagiri,Beed,Jalna,Wardha,Panvel,Kalyan,Vasai,Virar,Dombivli");
+  add("Delhi","Delhi,New Delhi");
+  add("Haryana","Gurugram,Gurgaon,Faridabad,Panipat,Ambala,Karnal,Hisar,Rohtak,Sonipat,Yamunanagar,Panchkula,Bhiwani,Sirsa,Kurukshetra,Rewari,Jind,Kaithal,Palwal");
+  add("Uttar Pradesh","Noida,Ghaziabad,Lucknow,Kanpur,Varanasi,Agra,Meerut,Prayagraj,Allahabad,Bareilly,Aligarh,Moradabad,Saharanpur,Gorakhpur,Firozabad,Jhansi,Mathura,Ayodhya,Baraut,Muzaffarnagar,Rampur,Shahjahanpur,Etawah,Mirzapur,Bulandshahr,Hapur,Greater Noida,Sitapur,Unnao,Jaunpur,Banda");
+  add("Rajasthan","Jaipur,Jodhpur,Udaipur,Kota,Ajmer,Bikaner,Alwar,Bhilwara,Sikar,Pali,Sri Ganganagar,Bharatpur,Chittorgarh,Jhunjhunu");
+  add("Gujarat","Ahmedabad,Surat,Vadodara,Rajkot,Bhavnagar,Jamnagar,Gandhinagar,Junagadh,Anand,Bharuch,Navsari,Valsad,Mehsana,Nadiad,Morbi");
+  add("Karnataka","Bengaluru,Bangalore,Mysuru,Mysore,Mangaluru,Mangalore,Hubli,Dharwad,Belagavi,Belgaum,Kalaburagi,Gulbarga,Davangere,Shivamogga,Tumakuru,Udupi,Ullal,Bellary,Hassan,Manipal");
+  add("Tamil Nadu","Chennai,Coimbatore,Madurai,Tiruchirappalli,Trichy,Salem,Tirunelveli,Erode,Vellore,Tiruppur,Thanjavur,Thoothukudi,Hosur,Kanchipuram,Dindigul");
+  add("Telangana","Hyderabad,Secunderabad,Warangal,Nizamabad,Karimnagar,Khammam,Ramagundam");
+  add("Andhra Pradesh","Visakhapatnam,Vijayawada,Guntur,Nellore,Tirupati,Rajahmundry,Kakinada,Kurnool,Anantapur,Kadapa");
+  add("Kerala","Kochi,Ernakulam,Thiruvananthapuram,Trivandrum,Kozhikode,Calicut,Thrissur,Kollam,Alappuzha,Kannur,Palakkad,Kottayam,Malappuram");
+  add("West Bengal","Kolkata,Howrah,Siliguri,Durgapur,Asansol,Darjeeling,Kharagpur,Bardhaman,Malda");
+  add("Odisha","Bhubaneswar,Cuttack,Rourkela,Puri,Berhampur,Sambalpur,Balasore");
+  add("Bihar","Patna,Gaya,Muzaffarpur,Bhagalpur,Darbhanga,Purnia,Begusarai,Chapra");
+  add("Jharkhand","Ranchi,Jamshedpur,Dhanbad,Bokaro,Hazaribagh,Deoghar");
+  add("Madhya Pradesh","Bhopal,Indore,Jabalpur,Gwalior,Ujjain,Sagar,Rewa,Satna,Ratlam,Dewas");
+  add("Chhattisgarh","Raipur,Bhilai,Bilaspur,Korba,Durg,Raigarh");
+  add("Chandigarh","Chandigarh");
+  add("Punjab","Ludhiana,Amritsar,Jalandhar,Patiala,Bathinda,Mohali,Pathankot,Hoshiarpur,Moga");
+  add("Himachal Pradesh","Shimla,Dharamshala,Solan,Mandi,Kullu,Manali,Baddi,Una");
+  add("Uttarakhand","Dehradun,Haridwar,Rishikesh,Roorkee,Haldwani,Nainital,Rudrapur,Kashipur");
+  add("Jammu and Kashmir","Srinagar,Jammu,Anantnag,Baramulla");
+  add("Assam","Guwahati,Silchar,Dibrugarh,Jorhat,Tezpur,Nagaon");
+  add("Manipur","Imphal"); add("Meghalaya","Shillong"); add("Mizoram","Aizawl");
+  add("Nagaland","Kohima,Dimapur"); add("Tripura","Agartala"); add("Arunachal Pradesh","Itanagar");
+  add("Sikkim","Gangtok"); add("Goa","Panaji,Margao,Vasco,Mapusa,Ponda");
+  add("Puducherry","Puducherry,Pondicherry"); add("Andaman and Nicobar Islands","Port Blair");
+})();
+const PIN_STATE=[
+  [/^11/,"Delhi"],[/^12/,"Haryana"],[/^13/,"Haryana"],
+  [/^160/,"Chandigarh"],[/^14/,"Punjab"],[/^15/,"Punjab"],[/^16/,"Punjab"],
+  [/^17/,"Himachal Pradesh"],[/^18/,"Jammu and Kashmir"],[/^19/,"Jammu and Kashmir"],
+  [/^24[6-9]/,"Uttarakhand"],[/^263/,"Uttarakhand"],[/^2[0-8]/,"Uttar Pradesh"],
+  [/^3[0-4]/,"Rajasthan"],[/^3[6-9]/,"Gujarat"],
+  [/^403/,"Goa"],[/^4[0-4]/,"Maharashtra"],[/^4[5-8]/,"Madhya Pradesh"],[/^49/,"Chhattisgarh"],
+  [/^50/,"Telangana"],[/^5[1-3]/,"Andhra Pradesh"],[/^5[6-9]/,"Karnataka"],
+  [/^6[0-4]/,"Tamil Nadu"],[/^6[7-9]/,"Kerala"],
+  [/^737/,"Sikkim"],[/^744/,"Andaman and Nicobar Islands"],[/^7[0-4]/,"West Bengal"],
+  [/^7[5-7]/,"Odisha"],[/^78/,"Assam"],
+  [/^81[4-6]/,"Jharkhand"],[/^8[23]/,"Jharkhand"],[/^8[0-5]/,"Bihar"]
+];
+const stateFromPin=p=>{ p=digits(p); if(p.length!==6) return "";
+  for(const [re,st] of PIN_STATE) if(re.test(p)) return st; return ""; };
+const ADDR_WORDS=new Set(("road,rd,street,st,nagar,colony,sector,block,flat,floor,apartment,apartments,apt,near,opp,opposite,house,plot,lane,gali,marg,chowk,tower,towers,phase,main,cross,layout,post,village,po,ps,building,society,vihar,puram,pura,bagh,park,extension,extn,complex,market,mandi,chowk,gate,circle,residency,enclave,heights,villa,wing,room,shop,store,no,number,behind,beside,front,india,pin,pincode,city,state,mobile,phone,contact,ph,email,name,address,adress,addres,dist,district,tehsil,taluka,landmark").split(","));
+function lev(a,b,max){
+  if(Math.abs(a.length-b.length)>max) return max+1;
+  const m=a.length,n=b.length; let prev=[...Array(n+1).keys()],cur=new Array(n+1);
+  for(let i=1;i<=m;i++){ cur[0]=i; let best=i;
+    for(let j=1;j<=n;j++){ cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1)); if(cur[j]<best)best=cur[j]; }
+    if(best>max) return max+1; const t=prev; prev=cur; cur=t;
+  }
+  return prev[n];
+}
+function findState(text){
+  const norm=s=>s.toLowerCase().replace(/[^a-z]/g,"");
+  const t=norm(text);
+  for(const st of STATES) if(t.includes(norm(st))) return st;
+  if(/uttarpradesh|uttrapradesh/.test(t)) return "Uttar Pradesh";
+  if(/orissa/.test(t)) return "Odisha";
+  if(/pondicherry/.test(t)) return "Puducherry";
+  if(/uttaranchal/.test(t)) return "Uttarakhand";
+  return "";
+}
+function findCity(text,pinState){
+  const words=String(text||"").toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/).filter(Boolean);
+  const grams=[];
+  for(let i=0;i<words.length;i++){ grams.push(words[i]); if(words[i+1]) grams.push(words[i]+" "+words[i+1]); }
+  for(const g of grams){ const st=CITY_STATE[g];
+    if(st && (!pinState || st===pinState)) return {city:titleCase(g),state:st,fuzzy:false}; }
+  for(const g of grams){ if(CITY_STATE[g]) return {city:titleCase(g),state:CITY_STATE[g],fuzzy:false}; }
+  if(pinState) for(const w of words){
+    if(w.length<6||ADDR_WORDS.has(w)) continue;
+    for(const key in CITY_STATE){
+      if(CITY_STATE[key]!==pinState||key.length<6) continue;
+      if(lev(w,key,1)<=1) return {city:titleCase(key),state:pinState,fuzzy:true,was:w};
+    }
+  }
+  return null;
+}
+const LABEL_RE=/^\s*(name|full\s*name|address|adress|addres|city|state|pin\s*code|pin|mobile|phone|ph|contact|content|number|email|e\s*-?\s*mail)(?:\s*(?:no\.?|number|id|i.?d\.?))?\s*(?:[:\-\u2013\u2014]+\s*|\s+)(.+)$/i;
+const LABEL_KEY={name:"name",fullname:"name",address:"address",adress:"address",addres:"address",
+  city:"city",state:"state",pincode:"pin",pin:"pin",mobile:"phone",phone:"phone",ph:"phone",
+  contact:"phone",content:"phone",number:"phone",email:"email",emai:"email"};
+const STRIP_WORDS=/\b(pin\s*code|pincode|pin|phone|mobile|contact|number|india|near\s*by)\b/gi;
+
+function parseAddressBlob(raw){
+  const flags=[]; const text=String(raw||"").replace(/\u00a0/g," ").trim();
+  const lab={}, plain=[];
+  text.split(/\r?\n/).forEach(line=>{
+    const m=LABEL_RE.exec(line);
+    if(m){ const k=LABEL_KEY[m[1].toLowerCase().replace(/[^a-z]/g,"")];
+      if(k){ lab[k]=lab[k]?lab[k]+", "+m[2].trim():m[2].trim(); return; } }
+    plain.push(line);
+  });
+  const emailOf=t=>(/[\w.+-]+@[\w-]+\.[\w.]{2,}/.exec(t)||[""])[0];
+  const phoneOf=t=>{ const re=/(?:\+?91[\s\-.]?)?\b([6-9]\d{4})[\s\-.]?(\d{5})\b/g; let m;
+    while((m=re.exec(t))){ if(/\d/.test(t.slice(Math.max(0,m.index-1),m.index))) continue; return m[1]+m[2]; }
+    return ""; };
+  const pinOf=(t,ph)=>{ const re=/\b([1-9]\d{5})\b/g; let m;
+    while((m=re.exec(t))){ if(ph&&ph.includes(m[1])) continue;
+      if(/\d/.test(t.slice(Math.max(0,m.index-1),m.index))||/\d/.test(t.slice(m.index+6,m.index+7))) continue;
+      return m[1]; } return ""; };
+
+  const email=emailOf(lab.email||"")||emailOf(text);
+  const phone=phoneOf(lab.phone||"")||phoneOf(text);
+  let pin=digits(lab.pin||"").slice(0,6);
+  if(pin.length!==6) pin=pinOf(text,phone);
+  const pinState=stateFromPin(pin);
+
+  let state=findState(lab.state||"")||findState(text);
+  const hit=findCity((lab.city?lab.city+" ":"")+text,pinState);
+  let city=hit?hit.city:titleCase(lab.city||"");
+  if(!state&&hit){ state=hit.state; flags.push("State read from the city — confirm it"); }
+  if(!state&&pinState){ state=pinState; flags.push("State guessed from the pincode — confirm it"); }
+  if(state&&pinState&&state!==pinState) flags.push("State and pincode disagree: "+pin+" points to "+pinState);
+  if(hit&&hit.fuzzy) flags.push("City read as \u201c"+hit.city+"\u201d, written \u201c"+hit.was+"\u201d");
+  if(!city) flags.push("City not found \u2014 type it in");
+
+  let name=titleCase(lab.name||"");
+  if(!name){
+    for(const line of plain){
+      const l=line.replace(/[\w.+-]+@[\w-]+\.[\w.]{2,}/g," ")
+        .replace(/(?:\+?91[\s\-.]?)?\b[6-9]\d{4}[\s\-.]?\d{5}\b/g," ")
+        .replace(/[^A-Za-z\s.]/g," ").replace(/\s+/g," ").trim();
+      if(!l) continue;
+      const ws=l.split(" ").filter(w=>w.length>1);
+      if(!ws.length||ws.length>4) continue;
+      if(ws.some(w=>ADDR_WORDS.has(w.toLowerCase()))) continue;
+      if(ws.some(w=>CITY_STATE[w.toLowerCase()]||STATES.some(st=>st.toLowerCase()===w.toLowerCase()))) continue;
+      name=titleCase(l); break;
+    }
+  }
+  if(!name) flags.push("No name in the message \u2014 ask the creator");
+
+  let body=lab.address||plain.join("\n");
+  if(email) body=body.split(email).join(" ");
+  body=body.replace(/(?:\+?91[\s\-.]?)?\b[6-9]\d{4}[\s\-.]?\d{5}\b/g," ");
+  if(pin) body=body.split(pin).join(" ");
+  const kill=t=>{ if(!t) return; body=body.replace(new RegExp("\\b"+String(t).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\b","ig")," "); };
+  kill(name); kill(city); kill(state); if(hit&&hit.was) kill(hit.was);
+  if(state==="Uttar Pradesh"){ kill("uttarpradesh"); kill("uttrapradesh"); }
+  body=body.replace(STRIP_WORDS," ");
+
+  const segs=[];
+  body.split(/[\n,]+/).map(x=>x.replace(/\s+/g," ").trim().replace(/^[-\u2013\u2014:.\s]+|[-\u2013\u2014:.\s]+$/g,""))
+    .filter(Boolean).forEach(x=>{
+      const k=x.toLowerCase().replace(/[^a-z0-9]/g,"");
+      if(!k||k==="india"||k.length<2) return;
+      if(segs.some(y=>y.toLowerCase().replace(/[^a-z0-9]/g,"")===k)) return;
+      segs.push(x);
+    });
+  let addr1="",addr2="",spill=false;
+  for(const x of segs){
+    if(!spill&&(!addr1||(addr1.length+x.length+2)<=42)) addr1=addr1?addr1+", "+x:x;
+    else { spill=true; addr2=addr2?addr2+", "+x:x; }
+  }
+  if(!addr2&&addr1.length>62){
+    const m=/^(.{25,}?)\s+(near\s+.+|opp\.?\s+.+|opposite\s+.+|behind\s+.+|beside\s+.+)$/i.exec(addr1);
+    if(m){ addr1=m[1].trim(); addr2=titleCase(m[2].trim().slice(0,1))+m[2].trim().slice(1); }
+  }
+  if(!addr1) flags.push("No street address found");
+  if((addr1+addr2).length>120) flags.push("Address is long \u2014 trim it, UC cuts long lines");
+  if(digits(phone).length!==10) flags.push("No 10-digit mobile \u2014 the courier will reject it");
+  if(digits(pin).length!==6) flags.push("No 6-digit pincode found");
+  return {name,phone,email,addr1,addr2,city,state,pin:digits(pin),flags,raw:text};
+}
+function splitAddressBlobs(text){
+  const parts=String(text||"").split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);
+  return parts.length?parts:[String(text||"").trim()].filter(Boolean);
+}
+/* A creator often sends the address, then the phone or email in a second
+   message. A block carrying only contact details belongs to the one above it. */
+function parseAddressBatch(text){
+  const out=[];
+  splitAddressBlobs(text).forEach(blob=>{
+    const r=parseAddressBlob(blob);
+    const contactOnly=!r.addr1&&!r.pin&&!r.name&&!r.city;
+    if(contactOnly&&out.length){
+      const prev=out[out.length-1];
+      if(!prev.phone&&r.phone) prev.phone=r.phone;
+      if(!prev.email&&r.email) prev.email=r.email;
+      prev.raw=prev.raw+"\n"+r.raw;
+      prev.flags=prev.flags.filter(f=>!/10-digit mobile/.test(f));
+      if(digits(prev.phone).length!==10) prev.flags.push("No 10-digit mobile \u2014 the courier will reject it");
+      return;
+    }
+    out.push(r);
+  });
+  return out;
+}
+</script>
+
+<script>
+/* ================= paste-address review drawer ================= */
+function openAddressPaste(opts){
+  opts=opts||{};
+  let raw="", recs=[], busy=false;
+  const api=drawer(opts.single?"Paste the address":"Paste addresses from WhatsApp",
+    opts.single?"One creator — the fields are split for you":"One creator per block, blank line between them",()=>{});
+  const list=el("div",{});
+
+  const parse=()=>{
+    recs=parseAddressBatch(raw).map(r=>({...r,skip:false}));
+    draw();
+  };
+  const draw=()=>{
+    list.innerHTML="";
+    if(!recs.length){ list.appendChild(el("div",{class:"hint"},"Nothing parsed yet.")); foot(); return; }
+    const ok=recs.filter(r=>!r.skip&&!addressProblems({name:r.name,phone:r.phone,addr1:r.addr1,city:r.city,state:r.state,pin:r.pin}).length).length;
+    list.appendChild(el("div",{class:"callout"+(ok===recs.length?"":" warn")},
+      el("b",{},ok+" of "+recs.length+" ready to ship. "),
+      ok===recs.length?"Check the flagged guesses, then save.":"The rest need a field typed in — they are marked below."));
+    recs.forEach((r,i)=>list.appendChild(card(r,i)));
+    foot();
+  };
+  const card=(r,i)=>{
+    const probs={}; addressProblems({name:r.name,phone:r.phone,addr1:r.addr1,city:r.city,state:r.state,pin:r.pin})
+      .forEach(([k,m])=>{ if(!probs[k]) probs[k]=m; });
+    const wrap=el("div",{class:"fs",style:r.skip?"opacity:.45":null});
+    wrap.appendChild(el("h4",{},
+      el("span",{},"Creator "+(i+1)+(r.name?" · "+r.name:"")),
+      el("span",{style:"flex:none;margin-left:auto;display:flex;gap:6px;align-items:center"},
+        Object.keys(probs).length?pill(Object.keys(probs).length+" to fix","crit"):pill("Ready","good"),
+        opts.single?null:el("button",{class:"btn btn-q btn-sm",onclick:()=>{r.skip=!r.skip;draw();}},r.skip?"Include":"Skip"))));
+    if(r.flags.length) wrap.appendChild(el("div",{class:"callout warn",style:"margin-bottom:12px"},
+      el("ul",{style:"margin:0 0 0 16px;padding:0"},...r.flags.map(f=>el("li",{},f)))));
+    const fld=(label,key,node,opt)=>{ const f=field(label,node,opt||{});
+      if(probs[key]){ node.classList.add("bad"); f.appendChild(el("div",{class:"err"},probs[key])); } return f; };
+    wrap.appendChild(el("div",{class:"grid2"},
+      fld("Name","name",input(r.name,v=>{r.name=v;}),{req:true}),
+      fld("Mobile","phone",input(r.phone,v=>{r.phone=v;},{inputmode:"numeric"}),{req:true}),
+      field("Email",input(r.email,v=>{r.email=v;},{type:"email"})),
+      fld("Address line 1","addr1",input(r.addr1,v=>{r.addr1=v;}),{req:true,span:true}),
+      field("Address line 2 / landmark",input(r.addr2,v=>{r.addr2=v;}),{span:true}),
+      fld("Pincode","pin",input(r.pin,v=>{r.pin=digits(v).slice(0,6);}),{req:true}),
+      fld("City","city",input(r.city,v=>{r.city=v;}),{req:true}),
+      fld("State","state",select(r.state,[["","Choose the state…"],...STATES],v=>{r.state=v;}),{req:true,span:true})));
+    const det=el("details",{style:"margin-top:10px"});
+    det.appendChild(el("summary",{style:"font-size:11.5px;color:var(--ink-3);cursor:pointer"},"What the creator sent"));
+    det.appendChild(el("pre",{style:"white-space:pre-wrap;font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin:6px 0 0"},r.raw));
+    wrap.appendChild(det);
+    return wrap;
+  };
+  const foot=()=>{
+    api.foot.innerHTML="";
+    const live=recs.filter(r=>!r.skip);
+    if(opts.single){
+      api.foot.appendChild(el("button",{class:"btn btn-p",disabled:live.length?null:true,onclick:()=>{
+        opts.onPick(live[0]); api.close();}},"Use this address"));
+    } else {
+      api.foot.appendChild(el("button",{class:"btn btn-p",disabled:live.length?null:true,onclick:save},
+        "Add "+live.length+" to influencer master"));
+    }
+    if(Sampler&&recs.length) api.foot.appendChild(el("button",{class:"btn",disabled:busy?true:null,onclick:tidy},
+      busy?"Tidying…":"Tidy with AI"));
+    api.foot.appendChild(el("span",{style:"flex:1"}));
+    api.foot.appendChild(el("button",{class:"btn btn-q btn-sm",onclick:api.close},"Cancel"));
+  };
+  async function tidy(){
+    busy=true; foot();
+    const payload=recs.map((r,i)=>({i,raw:r.raw.slice(0,900)}));
+    const prompt=[
+      "Split each Indian shipping address below into courier-ready fields. Do not invent anything:",
+      "if a field is not in the text, return an empty string. Keep the creator's own street details;",
+      "only fix capitalisation, expand obvious abbreviations, drop repeated fragments, and put the",
+      "flat/house number and building on line 1 with the locality and landmark on line 2.",
+      "Line 1 and line 2 must each stay under 60 characters. Use the exact Indian state name.",
+      "",
+      ...payload.map(x=>"### "+x.i+"\n"+x.raw),
+      "",
+      'Reply with only a JSON array, one object per ### block, in the same order:',
+      '[{"i":0,"name":"","phone":"","email":"","addr1":"","addr2":"","city":"","state":"","pin":""}]'
+    ].join("\n");
+    try{
+      const arr=await Sampler.json(prompt,{modelTier:"default"});
+      if(Array.isArray(arr)) arr.forEach(o=>{
+        const r=recs[num(o&&o.i)]; if(!r||!o) return;
+        ["name","phone","email","addr1","addr2","city","state","pin"].forEach(k=>{
+          const v=String(o[k]??"").trim(); if(v) r[k]=k==="pin"?digits(v).slice(0,6):v;
+        });
+        if(!STATES.includes(r.state)) r.state=findState(r.state)||r.state;
+        r.flags=[...r.flags,"Tidied by AI — check line 1 and line 2"];
+      });
+      busy=false; draw(); toast("Tidied — check the fields before saving");
+    }catch(e){ busy=false; draw(); toast(sampleErrCopy(e&&e.code),true); }
+  }
+  async function save(){
+    const live=recs.filter(r=>!r.skip);
+    const bad=live.filter(r=>addressProblems({name:r.name,phone:r.phone,addr1:r.addr1,city:r.city,state:r.state,pin:r.pin}).length);
+    if(bad.length&&!confirm(bad.length+" of these still have a missing or invalid field.\n\nOK = save them anyway as incomplete records.\nCancel = go back and fix them.")) return;
+    let added=0,merged=0;
+    for(const r of live){
+      const ph=phone10(r.phone);
+      const dup=Object.values(S.influencers).find(x=>ph.length===10&&phone10(x.phone)===ph);
+      if(dup){ await Store.put("influencers",{...dup,name:titleCase(r.name)||dup.name,email:r.email||dup.email,
+        addr1:r.addr1,addr2:r.addr2,city:titleCase(r.city),state:r.state,pin:digits(r.pin)}); merged++; }
+      else { await Store.put("influencers",{id:uid("inf"),name:titleCase(r.name),handle:"",platform:"Instagram",
+        phone:ph,email:r.email,addr1:r.addr1,addr2:r.addr2,city:titleCase(r.city),state:r.state,pin:digits(r.pin),
+        tier:TIERS[1],category:CATEGORIES[0],notes:"",createdAt:todayISO()}); added++; }
+    }
+    api.close(); toast(added+" added, "+merged+" address"+(merged===1?"":"es")+" updated");
+  }
+
+  api.body.appendChild(el("div",{class:"callout"},
+    opts.single
+      ? "Paste exactly what the creator sent — labels, extra lines, repeated bits and all."
+      : "Paste the whole WhatsApp dump. Leave a blank line between creators and each one becomes its own record. A message carrying only a phone number or email is attached to the creator above it."));
+  api.body.appendChild(field(opts.single?"What the creator sent":"What the creators sent",
+    el("textarea",{rows:opts.single?7:12,
+      placeholder:"Name - Priya Sharma\nAddress - 12 MG Road, near Axis Bank\nPincode 560001\nPhone 9876543210",
+      oninput:e=>{raw=e.target.value;parse();}}),
+    {hint:"Nothing is saved until you press the button at the bottom."}));
+  api.body.appendChild(list);
+  draw();
+}
+</script>
+
 <script>
 /* ================= AI creator screening =================
    The page cannot read Instagram. Every number here is entered by the
