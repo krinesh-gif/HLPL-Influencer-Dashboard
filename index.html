@@ -630,6 +630,7 @@ const TABS = [
   {id:"ship",     label:"Ship Queue",  lane:"lane-s"},
   {id:"content",  label:"Content",     lane:"lane-m"},
   {id:"people",   label:"Influencers", lane:"lane-m"},
+  {id:"screening",label:"Screening",   lane:"lane-m"},
   {id:"products", label:"Products",    lane:""},
   {id:"analytics",label:"Analytics",   lane:""},
   {id:"setup",    label:"Setup",       lane:""}
@@ -641,14 +642,16 @@ function render(){
   renderTabs(); renderRibbon();
   const v=$("#view"); v.innerHTML="";
   const fn={collabs:viewCollabs,ship:viewShip,content:viewContent,people:viewPeople,
-            products:viewProducts,analytics:viewAnalytics,setup:viewSetup}[UI.tab]||viewCollabs;
+            screening:viewScreening,products:viewProducts,analytics:viewAnalytics,
+            setup:viewSetup}[UI.tab]||viewCollabs;
   v.appendChild(fn());
 }
 function renderTabs(){
   const n=$("#tabs"); n.innerHTML="";
   const counts={collabs:collabList().length,ship:collabList().filter(c=>["Ready to Ship","Order Created"].includes(c.shipStatus)).length,
     content:collabList().filter(c=>c.shipStatus==="Delivered"&&!c.postLink).length,
-    people:Object.keys(S.influencers).length,products:Object.keys(S.skus).length};
+    people:Object.keys(S.influencers).length,products:Object.keys(S.skus).length,
+    screening:Object.values(S.influencers).filter(i=>i.screen).length};
   TABS.forEach(t=>{
     const b=el("button",{class:"tab "+t.lane,role:"tab","aria-selected":UI.tab===t.id?"true":"false",
       onclick:()=>go(t.id)},t.label);
@@ -940,7 +943,7 @@ function viewPeople(){
       el("p",{},"Saved once, reused forever. Repeat a collab and the address, pincode and mobile come along — nobody asks in the group again.")),
     el("div",{class:"head-actions"},
       el("button",{class:"btn",onclick:()=>openAddressPaste({})},"Paste addresses"),
-      Sampler?el("button",{class:"btn",onclick:()=>openScreen(null)},"Screen a creator with AI"):null,
+      el("button",{class:"btn",onclick:()=>openScreen(null)},"Screen a creator"),
       el("button",{class:"btn btn-p",onclick:()=>openInfluencer(null)},"+ Add influencer"))));
 
   const q=UI.q.toLowerCase();
@@ -975,7 +978,7 @@ function viewPeople(){
       el("td",{class:"num"},v?compact(v):"—"),
       el("td",{class:"nowrap"},
         el("button",{class:"btn btn-sm btn-p",onclick:()=>repeatCollab(i.id)},"Repeat"),
-        Sampler?el("button",{class:"btn btn-sm btn-q",onclick:()=>openScreen(i.id)},"Screen"):null,
+        el("button",{class:"btn btn-sm btn-q",onclick:()=>openScreen(i.id)},"Screen"),
         el("button",{class:"btn btn-sm btn-q",onclick:()=>openInfluencer(i.id)},"Edit"))));
   });
   wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
@@ -1266,6 +1269,10 @@ function viewSetup(){
           el("div",{class:"hint"},Store.mode==="live"
             ? "Live — every change is stored and both teams see it within seconds."
             : "This browser only. Open the published dashboard link for the shared, live board.")),
+        el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"AI screening"),
+          el("div",{class:"hint"},Sampler
+            ? "Available in this view. Each run uses the Claude usage of whoever presses the button."
+            : "Not available in this view. The engagement maths still runs; only the written judgement is off.")),
         el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"Backup"),
           el("button",{class:"btn btn-sm",onclick:exportBackup},"Download full backup (JSON)")),
         hasSamples()?el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"Sample rows"),
@@ -1394,7 +1401,7 @@ function openCollabDraft(d,id,title,sub,focus){
           el("div",{class:"t-sub"},collabList().filter(c=>c.influencerId===inf.id&&c.id!==d.id).length+" earlier collabs on record")),
         el("button",{class:"btn btn-sm",style:"margin-left:auto",onclick:()=>{d.influencerId="";build();}},"Change"),
         el("button",{class:"btn btn-sm btn-q",onclick:()=>{d.ship=shipFromInfluencer(inf);build();toast("Saved address pulled in");}},"Pull saved address"),
-        Sampler?el("button",{class:"btn btn-sm btn-q",onclick:()=>openScreen(inf.id)},"Screen with AI"):null));
+        el("button",{class:"btn btn-sm btn-q",onclick:()=>openScreen(inf.id)},"Screen")));
       if(inf.screen) who.appendChild(el("div",{class:"callout"+(inf.screen.verdict==="Pass"?" crit":inf.screen.verdict==="Go"?"":" warn"),style:"margin-bottom:12px"},
         el("b",{},"Screened "+dmy(inf.screen.at)+" — "+inf.screen.verdict+". "),inf.screen.headline||""));
     } else {
@@ -1631,7 +1638,7 @@ function openInfluencer(id){
       i.name=titleCase(i.name); i.phone=phone10(i.phone); i.pin=digits(i.pin);
       await Store.put("influencers",i); api.close(); toast("Saved");}},"Save"));
     if(id) api.foot.appendChild(el("button",{class:"btn btn-s",onclick:()=>{api.close();repeatCollab(id);}},"Start a repeat collab →"));
-    if(id&&Sampler) api.foot.appendChild(el("button",{class:"btn",onclick:()=>{api.close();openScreen(id);}},"Screen with AI"));
+    if(id) api.foot.appendChild(el("button",{class:"btn",onclick:()=>{api.close();openScreen(id);}},"Screen"));
     api.foot.appendChild(el("button",{class:"btn btn-sm",onclick:()=>openAddressPaste({single:true,onPick:r=>{
       Object.assign(i,{name:titleCase(r.name)||i.name,phone:phone10(r.phone),email:r.email||i.email,
         addr1:r.addr1,addr2:r.addr2,city:titleCase(r.city),state:r.state,pin:digits(r.pin)});
@@ -2061,6 +2068,74 @@ function screenMath(f){
     projCPV:(aV&&num(f.quote))?num(f.quote)/aV:0,
     projCPM:(aV&&num(f.quote))?num(f.quote)/aV*1000:0};
 }
+function viewScreening(){
+  const wrap=el("div",{});
+  wrap.appendChild(el("div",{class:"view-head"},
+    el("div",{},el("h1",{},"Creator screening"),
+      el("p",{},"Paste what a profile shows and get a decision. The engagement maths is computed here; the judgement call is Claude\u2019s.")),
+    el("div",{class:"head-actions"},
+      el("button",{class:"btn btn-p",onclick:()=>openScreen(null)},"Screen a creator"))));
+
+  wrap.appendChild(el("div",{class:"callout"+(Sampler?"":" warn")},
+    Sampler
+      ? [el("b",{},"AI screening is live in this view. "),
+         "The first run asks you to allow it, and it runs on your own Claude usage."]
+      : [el("b",{},"AI screening is not available in this view. "),
+         "The engagement maths still runs on anything you paste. If this is the published board and you are signed in, reload the page \u2014 the capability is granted a moment after load."]));
+
+  const screened=Object.values(S.influencers).filter(i=>i.screen)
+    .sort((a,b)=>String(b.screen.at||"").localeCompare(String(a.screen.at||"")));
+  const rest=Object.values(S.influencers).filter(i=>!i.screen)
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+
+  if(screened.length){
+    const tone={Go:"good",Negotiate:"warn",Hold:"warn",Pass:"crit"};
+    wrap.appendChild(el("div",{class:"kpis"},
+      kpi("Screened",String(screened.length),"Creators with a saved read"),
+      kpi("Worth locking",String(screened.filter(i=>i.screen.verdict==="Go").length),"Verdict: Go","accent"),
+      kpi("Negotiate first",String(screened.filter(i=>["Negotiate","Hold"].includes(i.screen.verdict)).length),"Priced above the band"),
+      kpi("Passed",String(screened.filter(i=>i.screen.verdict==="Pass").length),"Not worth the box")));
+    const tb=el("tbody",{});
+    screened.forEach(i=>{
+      const s=i.screen;
+      tb.appendChild(el("tr",{},
+        el("td",{},el("button",{class:"linkish",onclick:()=>openScreen(i.id)},i.name),
+          el("div",{class:"t-sub mono"},"@"+(i.handle||"\u2014")+(i.tier?" \u00b7 "+i.tier.split(" ")[0]:""))),
+        el("td",{},pill(s.verdict||"\u2014",tone[s.verdict]||"neutral"),
+          el("div",{class:"t-sub"},(s.confidence||"")+" confidence")),
+        el("td",{class:"num"},num(s.fitScore)?num(s.fitScore)+"/100":"\u2014"),
+        el("td",{class:"num"},num(s.er)?num(s.er).toFixed(1)+"%":"\u2014"),
+        el("td",{class:"num"},num(s.avgViews)?compact(s.avgViews):"\u2014"),
+        el("td",{class:"num"},num(s.fairPriceLow)?(inrShort(s.fairPriceLow)+"\u2013"+inrShort(s.fairPriceHigh)):"\u2014",
+          num(s.quoted)?el("div",{class:"t-sub"},"quoted "+inrShort(s.quoted)):null),
+        el("td",{style:"max-width:280px"},el("div",{style:"font-size:12.5px"},s.headline||""),
+          el("div",{class:"t-sub"},"read "+dmy(s.at))),
+        el("td",{class:"nowrap"},
+          el("button",{class:"btn btn-sm btn-p",onclick:()=>repeatCollab(i.id)},"Lock"),
+          el("button",{class:"btn btn-sm btn-q",onclick:()=>openScreen(i.id)},"Open"))));
+    });
+    wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
+      el("thead",{},el("tr",{},el("th",{},"Creator"),el("th",{},"Verdict"),el("th",{class:"num"},"Fit"),
+        el("th",{class:"num"},"ER"),el("th",{class:"num"},"Avg views"),el("th",{class:"num"},"Worth"),
+        el("th",{},"The read"),el("th",{},""))),tb))));
+  } else {
+    wrap.appendChild(el("div",{class:"panel"},emptyState("Nothing screened yet",
+      "Open a creator, paste their follower count and the last few reels, and the read is saved here.",
+      el("button",{class:"btn btn-p",style:"margin-top:14px",onclick:()=>openScreen(null)},"Screen a creator"))));
+  }
+
+  if(rest.length){
+    const chips=el("div",{style:"display:flex;flex-wrap:wrap;gap:8px"});
+    rest.slice(0,40).forEach(i=>chips.appendChild(
+      el("button",{class:"pchip",onclick:()=>openScreen(i.id)},i.name||"Unnamed")));
+    wrap.appendChild(el("div",{style:"margin-top:16px"},el("div",{class:"panel"},
+      el("div",{class:"panel-h"},el("div",{},el("h3",{},"Not screened yet"),
+        el("div",{class:"sub"},rest.length+" in the master \u2014 click one to screen it"))),
+      el("div",{class:"panel-b"},chips))));
+  }
+  return wrap;
+}
+
 function openScreen(infId){
   const inf=infId?S.influencers[infId]:null;
   const f={handle:(inf&&inf.handle)||"",followers:(inf&&inf.followers)||"",
