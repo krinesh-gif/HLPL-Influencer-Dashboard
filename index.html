@@ -252,8 +252,6 @@ const SHIP_ALL  = [...SHIP_FLOW,"On Hold","Cancelled"];
 const SHIP_TONE = {"Draft":"neutral","Ready to Ship":"warn","Order Created":"info","Dispatched":"rose","Delivered":"good","On Hold":"crit","Cancelled":"neutral"};
 const PAY_STATES = ["Not Applicable (Barter)","Not Due","Due","Partially Paid","Paid"];
 const PAY_TONE = {"Not Applicable (Barter)":"neutral","Not Due":"neutral","Due":"warn","Partially Paid":"warn","Paid":"good"};
-const TNC_STATES = ["Not Sent","Sent","Confirmed"];
-const TNC_TONE = {"Not Sent":"crit","Sent":"warn","Confirmed":"good"};
 const TIERS = ["Nano (<10K)","Micro (10K-100K)","Mid (100K-500K)","Macro (500K-1M)","Celebrity (1M+)"];
 const PLATFORMS = ["Instagram","YouTube","Both"];
 const DELIVERABLES = ["1 Reel","2 Reels","Reel + Story","Story only","YouTube Shorts","Static Post","Reel + Static","Custom"];
@@ -466,33 +464,28 @@ function sampleData(){
     deliverable:"1 Reel",items:pick(4),box:"PR Box",owner:"Marketing",
     ship:{name:inf.name,phone:inf.phone,email:inf.email,addr1:inf.addr1,addr2:inf.addr2,city:inf.city,state:inf.state,pin:inf.pin},
     price:0,barter:false,payTerms:"50% advance / 50% post",payStatus:"Not Due",payDue:"",payDate:"",paid:0,
-    tnc:"Not Sent",tncDate:"",tncLink:"",shipStatus:"Draft",ucCode:"",courier:"",awb:"",
+    shipStatus:"Draft",ucCode:"",courier:"",awb:"",
     requestedAt:todayISO(),dispatchDate:"",deliveryDate:"",postDate:"",postLink:"",
     views:0,likes:0,comments:0,shares:0,saves:0,reach:0,notes:"",sample:true,createdAt:todayISO(),...over});
 
   const collabs=[
-    base(people[0],{price:12000,payTerms:"100% post-live",payStatus:"Due",payDue:todayISO(),tnc:"Confirmed",tncDate:todayISO(),
-      shipStatus:"Delivered",ucCode:"PR-2601-001",courier:"Delhivery",awb:"1489327765412",
+    base(people[0],{price:12000,payTerms:"100% post-live",payStatus:"Due",payDue:todayISO(),shipStatus:"Delivered",ucCode:"PR-2601-001",courier:"Delhivery",awb:"1489327765412",
       requestedAt:addDays(-24),dispatchDate:addDays(-21),deliveryDate:addDays(-18),
       postDate:addDays(-12),postLink:"https://instagram.com/reel/example-1",
       views:184000,likes:9100,comments:412,shares:820,saves:1560,reach:196000,month:prev,
       items:[{sku:skus[4].code,name:skus[4].name,qty:1,mrp:1299},{sku:skus[1].code,name:skus[1].name,qty:1,mrp:599}]}),
-    base(people[1],{price:8500,payStatus:"Paid",payDate:addDays(-6),paid:8500,tnc:"Confirmed",tncDate:addDays(-20),
-      shipStatus:"Delivered",ucCode:"PR-2601-002",courier:"Bluedart",awb:"77219940025",
+    base(people[1],{price:8500,payStatus:"Paid",payDate:addDays(-6),paid:8500,shipStatus:"Delivered",ucCode:"PR-2601-002",courier:"Bluedart",awb:"77219940025",
       requestedAt:addDays(-20),dispatchDate:addDays(-18),deliveryDate:addDays(-15),
       postDate:addDays(-9),postLink:"https://instagram.com/reel/example-2",
       views:96400,likes:5300,comments:268,shares:390,saves:910,reach:104000,month:prev}),
     base(people[2],{price:35000,deliverable:"Reel + Story",payTerms:"50% advance / 50% post",payStatus:"Partially Paid",
-      paid:17500,payDue:addDays(9),tnc:"Confirmed",tncDate:addDays(-5),shipStatus:"Dispatched",
+      paid:17500,payDue:addDays(9),shipStatus:"Dispatched",
       ucCode:"PR-2602-004",courier:"Delhivery",awb:"1489328891140",requestedAt:addDays(-6),dispatchDate:addDays(-2),
       items:[{sku:skus[4].code,name:skus[4].name,qty:1,mrp:1299},{sku:skus[3].code,name:skus[3].name,qty:2,mrp:449}]}),
-    base(people[3],{price:0,barter:true,payStatus:"Not Applicable (Barter)",tnc:"Sent",tncDate:addDays(-3),
-      shipStatus:"Ready to Ship",box:"Normal Box",requestedAt:addDays(-4),items:pick(0,2)}),
-    base(people[4],{price:6000,payStatus:"Not Due",tnc:"Confirmed",tncDate:addDays(-2),
-      shipStatus:"Ready to Ship",requestedAt:addDays(-3),
+    base(people[3],{price:0,barter:true,payStatus:"Not Applicable (Barter)",shipStatus:"Ready to Ship",box:"Normal Box",requestedAt:addDays(-4),items:pick(0,2)}),
+    base(people[4],{price:6000,payStatus:"Not Due",shipStatus:"Ready to Ship",requestedAt:addDays(-3),
       items:[{sku:skus[2].code,name:skus[2].name,qty:1,mrp:349},{sku:skus[0].code,name:skus[0].name,qty:1,mrp:399}]}),
-    base(people[5],{price:28000,deliverable:"YouTube Shorts",platform:"YouTube",payStatus:"Not Due",tnc:"Not Sent",
-      shipStatus:"Draft",requestedAt:todayISO(),ship:{name:people[5].name,phone:people[5].phone,email:people[5].email,
+    base(people[5],{price:28000,deliverable:"YouTube Shorts",platform:"YouTube",payStatus:"Not Due",shipStatus:"Draft",requestedAt:todayISO(),ship:{name:people[5].name,phone:people[5].phone,email:people[5].email,
         addr1:people[5].addr1,addr2:people[5].addr2,city:people[5].city,state:people[5].state,pin:people[5].pin}})
   ];
   return {skus,people,collabs};
@@ -624,7 +617,7 @@ function briefText(c){
 </script>
 <script>
 /* ================= UI state + router ================= */
-const UI = { tab:"collabs", q:"", month:"", status:"", pay:"", tnc:"", sel:new Set(), anMonth:"" };
+const UI = { tab:"collabs", q:"", month:"", status:"", pay:"", sel:new Set(), anMonth:"" };
 const TABS = [
   {id:"collabs",  label:"Collabs",     lane:"lane-m"},
   {id:"ship",     label:"Ship Queue",  lane:"lane-s"},
@@ -669,8 +662,7 @@ function renderRibbon(){
     ["Order created",     L.filter(c=>c.shipStatus==="Order Created").length, "var(--teal)","ship"],
     ["In transit",        L.filter(c=>c.shipStatus==="Dispatched").length, "var(--c1)","ship"],
     ["Reel due",          L.filter(c=>c.shipStatus==="Delivered"&&!c.postLink).length, "var(--c4)","content"],
-    ["Payment due",       L.filter(c=>["Due","Partially Paid"].includes(c.payStatus)).length, "var(--c2)","collabs"],
-    ["T&C not confirmed", L.filter(c=>c.tnc!=="Confirmed").length, "var(--crit)","collabs"]
+    ["Payment due",       L.filter(c=>["Due","Partially Paid"].includes(c.payStatus)).length, "var(--c2)","collabs"]
   ];
   chips.forEach(([label,n2,color,tab])=>{
     n.appendChild(el("button",{class:"pchip",onclick:()=>go(tab)},
@@ -740,7 +732,7 @@ function viewCollabs(){
   const wrap=el("div",{});
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Collab register"),
-      el("p",{},"Every locked influencer, the box that goes out, the money, and the paperwork. One row — both teams read it.")),
+      el("p",{},"Every locked influencer, the box that goes out, and the money. One row — both teams read it.")),
     el("div",{class:"head-actions"},
       el("button",{class:"btn",onclick:()=>go("people")},"Influencer master"),
       el("button",{class:"btn btn-p",onclick:()=>openCollab(null)},"+ Lock an influencer"))));
@@ -752,7 +744,6 @@ function viewCollabs(){
     kpi("Collabs shown",String(L.length),UI.month?monthLabel(UI.month):"All months"),
     kpi("Budget locked",inrShort(budget),"Sum of locked prices","accent"),
     kpi("Still to pay",inrShort(due),L.filter(c=>outstanding(c)>0).length+" influencers"),
-    kpi("T&C confirmed",L.filter(c=>c.tnc==="Confirmed").length+"/"+L.length,"Mail confirmation on record"),
     kpi("Boxes open",String(L.filter(isOpen).length),"Not yet delivered","supply")));
 
   wrap.appendChild(filterBar({pay:true}));
@@ -780,14 +771,13 @@ function viewCollabs(){
       el("td",{class:"num"},c.barter?el("span",{class:"tag"},"barter"):inr(c.price)),
       el("td",{},pill(c.payStatus,PAY_TONE[c.payStatus]),
         outstanding(c)>0?el("div",{class:"t-sub mono"},inr(outstanding(c))+" open"):null),
-      el("td",{},pill(c.tnc,TNC_TONE[c.tnc]),c.tncDate?el("div",{class:"t-sub mono"},dmy(c.tncDate)):null),
       el("td",{class:"num"},num(c.views)?compact(c.views):"—",
         num(c.views)?el("div",{class:"t-sub"},erOf(c).toFixed(1)+"% ER"):null),
       el("td",{class:"nowrap"},el("button",{class:"btn btn-sm btn-q",onclick:()=>openCollab(c.id)},"Open"))));
   });
   wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},
     el("table",{},
-      el("thead",{},el("tr",{},...["Influencer","Deliverable","Products / box","Shipment","Locked ₹","Payment","T&C mail","Views","",].map(h=>
+      el("thead",{},el("tr",{},...["Influencer","Deliverable","Products / box","Shipment","Locked ₹","Payment","Views","",].map(h=>
         el("th",{class:["Locked ₹","Views"].includes(h)?"num":""},h)))),
       tb))));
   return wrap;
@@ -1352,7 +1342,7 @@ function blankCollab(){
   return {influencerId:"",month:nowMonth(),platform:"Instagram",deliverable:"1 Reel",items:[],box:"PR Box",
     ship:{name:"",phone:"",email:"",addr1:"",addr2:"",city:"",state:"",pin:""},
     price:0,barter:false,payTerms:"100% post-live",payStatus:"Not Due",payDue:"",payDate:"",paid:0,
-    tnc:"Not Sent",tncDate:"",tncLink:"",shipStatus:"Draft",ucCode:"",courier:"",awb:"",
+    shipStatus:"Draft",ucCode:"",courier:"",awb:"",
     requestedAt:todayISO(),dispatchDate:"",deliveryDate:"",postDate:"",postLink:"",
     views:0,likes:0,comments:0,shares:0,saves:0,reach:0,notes:"",owner:"Marketing",createdAt:todayISO()};
 }
@@ -1434,7 +1424,7 @@ function openCollabDraft(d,id,title,sub,focus){
     api.body.appendChild(who);
 
     /* --- deal --- */
-    api.body.appendChild(section("Commercials & paperwork","lane-m",
+    api.body.appendChild(section("Commercials","lane-m",
       el("div",{class:"grid2"},
         field("Campaign month",input(d.month,v=>{d.month=v;},{type:"month"}),{req:true}),
         field("Deliverable",select(d.deliverable,DELIVERABLES,v=>{d.deliverable=v;})),
@@ -1449,10 +1439,7 @@ function openCollabDraft(d,id,title,sub,focus){
         field("Payment status",select(d.payStatus,PAY_STATES,v=>{d.payStatus=v;build();})),
         field("Payment due date",input(d.payDue,v=>{d.payDue=v;},{type:"date"})),
         field("Amount paid (₹)",input(d.paid,v=>{d.paid=num(v);},{type:"number",min:"0"})),
-        field("Paid on",input(d.payDate,v=>{d.payDate=v;},{type:"date"})),
-        field("T&C confirmed on mail",select(d.tnc,TNC_STATES,v=>{d.tnc=v; if(v==="Confirmed"&&!d.tncDate)d.tncDate=todayISO(); build();})),
-        field("T&C date",input(d.tncDate,v=>{d.tncDate=v;},{type:"date"})),
-        field("Mail thread link",input(d.tncLink,v=>{d.tncLink=v;},{placeholder:"Paste the Gmail link"}),{span:true}))));
+        field("Paid on",input(d.payDate,v=>{d.payDate=v;},{type:"date"})))));
 
     /* --- shipment --- */
     const ship=section("What ships, and where","lane-s");
@@ -2294,7 +2281,7 @@ function openScreen(infId){
   async function draftMail(){
     busy=true; build();
     const box=el("div",{class:"panel",style:"margin-top:14px"},
-      el("div",{class:"panel-h"},el("h3",{},"Outreach and T&C mail")),
+      el("div",{class:"panel-h"},el("h3",{},"Outreach mail")),
       el("div",{class:"panel-b"},el("div",{class:"hint"},"Thinking…")));
     out.appendChild(box);
     const body=box.querySelector(".panel-b");

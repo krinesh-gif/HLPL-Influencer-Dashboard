@@ -19,7 +19,7 @@ retypes an address, a SKU or a tracking number.
 
 ## Screens
 
-- **Collabs** — the register. Locked price, payment state, T&C-on-mail state, box contents, shipment stage.
+- **Collabs** — the register. Locked price, payment state, box contents, shipment stage.
 - **Ship queue** — supply's working view. Select ready rows → **Build UC bulk file** → upload in Unicommerce → **Paste dispatch details** to close the loop.
 - **Content** — post date, link, views, reach, likes, comments, shares, saves; ER, CPV and CPE computed.
 - **Influencers** — the master. Address, pincode, mobile, tier, category, full collab history, one-click repeat.
