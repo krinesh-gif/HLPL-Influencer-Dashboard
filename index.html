@@ -431,35 +431,70 @@ function collabProblems(c){
 /* ================= storage layer ================= */
 const S = { influencers:{}, collabs:{}, skus:{}, settings:{...DEFAULT_SETTINGS} };
 const Store = {
-  db:null, mode:"local", ready:false,
+  db:null, mode:"local", ready:false, diag:{}, poll:null, writing:0,
+
+  /* ---- the Neon-backed API used when this page is not a Claude artifact ---- */
+  api:{
+    code(){ try{ return localStorage.getItem("r2d:code")||""; }catch(e){ return ""; } },
+    setCode(c){ try{ localStorage.setItem("r2d:code",c||""); }catch(e){} },
+    async call(payload){
+      let r;
+      try{
+        r = await fetch("/api/data",{method:"POST",
+          headers:{"content-type":"application/json","x-team-code":this.code()},
+          body:JSON.stringify(payload)});
+      }catch(e){ const err=new Error("The dashboard could not reach its server."); err.kind="offline"; throw err; }
+      if(r.status===401){ const e=new Error("Wrong team code."); e.kind="locked"; throw e; }
+      if(r.status===404){ const e=new Error("No data API on this deployment."); e.kind="absent"; throw e; }
+      if(!r.ok){ let m="The server refused that."; try{ m=(await r.json()).error||m; }catch(_){}
+        const e=new Error(m); e.kind="failed"; throw e; }
+      return r.json();
+    }
+  },
+
   key(c){ return "r2d:"+c; },
   readLocal(c){ try{ return JSON.parse(localStorage.getItem(this.key(c))||"{}"); }catch(e){ return {}; } },
   writeLocal(c,map){ try{ localStorage.setItem(this.key(c),JSON.stringify(map)); }catch(e){} },
+
+  applySnapshot(snap){
+    for(const c of ["influencers","collabs","skus"]) S[c] = snap[c] || {};
+    const cfg = (snap.config||{}).settings || {};
+    const {id:_drop, ...body} = cfg;
+    S.settings = {...DEFAULT_SETTINGS, ...body};
+    if(!Array.isArray(S.settings.ucColumns)||!S.settings.ucColumns.length)
+      S.settings.ucColumns = UC_DEFAULT_COLUMNS.map(x=>({...x}));
+  },
+  startPolling(){
+    clearInterval(this.poll);
+    this.poll = setInterval(async ()=>{
+      if(this.writing>0 || document.hidden) return;
+      try{ const snap=await this.api.call({op:"snapshot"});
+        if(snap&&snap.ok){ this.applySnapshot(snap); render(); } }catch(e){}
+    }, 7000);
+  },
 
   async init(){
     let db=null, why="";
     const t0 = (window.performance&&performance.now)?performance.now():Date.now();
     const framed = (()=>{ try{ return window.top!==window.self; }catch(e){ return true; } })();
-    if(!window.claude) why="window.claude is absent \u2014 this page is not running inside a Claude viewer";
-    else if(typeof claude.use!=="function") why="window.claude exists but has no use() \u2014 an older or different viewer";
+    if(!window.claude) why="window.claude is absent";
+    else if(typeof claude.use!=="function") why="window.claude exists but has no use()";
     else {
-      try{ db = await claude.use("db");
-        if(!db) why="claude.use(db) resolved null \u2014 the viewer did not grant the shared database"; }
+      try{ db = await claude.use("db"); if(!db) why="claude.use(db) resolved null"; }
       catch(e){ why="claude.use(db) threw: "+((e&&e.code)||(e&&e.message)||String(e)); }
     }
     const ms = Math.round(((window.performance&&performance.now)?performance.now():Date.now())-t0);
     this.diag = {hasClaude:!!window.claude, hasUse:!!(window.claude&&typeof claude.use==="function"),
       framed, host:(location.hostname||"(local file)"), protocol:location.protocol,
-      ms, db:!!db, why, checkedAt:new Date().toISOString()};
+      ms, db:!!db, why, api:"not tried", checkedAt:new Date().toISOString()};
     if(window.claude && typeof claude.use==="function"){
       claude.use("sample").then(f=>{ this.diag.sample=!!f; }).catch(()=>{ this.diag.sample=false; });
       claude.use("downloads").then(f=>{ this.diag.downloads=!!f; }).catch(()=>{ this.diag.downloads=false; });
     }
-    this.db = db; this.mode = db ? "live" : "local";
+    this.db = db;
+
     if(db){
-      /* onSnapshot delivers the current state right after registration and on
-         every later change. There is no prefetch: a second read racing these
-         callbacks used to overwrite fresher data with a cached view. */
+      this.mode="live";
       const pending={};
       const waits=["influencers","collabs","skus"].map(c=>new Promise(res=>{ pending[c]=res; }));
       const settle=c=>{ if(pending[c]){ pending[c](); pending[c]=null; } };
@@ -478,13 +513,25 @@ const Store = {
           S.settings.ucColumns=UC_DEFAULT_COLUMNS.map(x=>({...x}));
         settleCfg(); render();
       }, settleCfg);
-      /* wait for the first delivery of each, but never hang the page on it */
       await Promise.race([Promise.all([...waits,cfgWait]), new Promise(r=>setTimeout(r,8000))]);
     } else {
-      for(const c of ["influencers","collabs","skus"]) S[c]=this.readLocal(c);
-      const cfg=this.readLocal("settings"); if(cfg && cfg.channel) S.settings={...DEFAULT_SETTINGS,...cfg};
+      let snap=null;
+      try{ snap = await this.api.call({op:"snapshot"}); this.diag.api="connected"; }
+      catch(e){ this.diag.api=e.kind||"failed"; this.diag.apiWhy=e.message||""; }
+      if(snap && snap.ok){
+        this.mode="neon";
+        this.applySnapshot(snap);
+        this.startPolling();
+      } else if(this.diag.api==="locked"){
+        this.mode="locked";
+      } else {
+        this.mode="local";
+        for(const c of ["influencers","collabs","skus"]) S[c]=this.readLocal(c);
+        const cfg=this.readLocal("settings"); if(cfg && cfg.channel) S.settings={...DEFAULT_SETTINGS,...cfg};
+      }
     }
-    if(num(S.settings.ucVersion)!==UC_TEMPLATE_VERSION){
+
+    if(this.mode!=="locked" && num(S.settings.ucVersion)!==UC_TEMPLATE_VERSION){
       S.settings.ucColumns=UC_DEFAULT_COLUMNS.map(c=>({...c}));
       S.settings.ucVersion=UC_TEMPLATE_VERSION;
       if(!S.settings.shipMethod) S.settings.shipMethod="STANDARD";
@@ -492,31 +539,52 @@ const Store = {
       this.saveSettings();
     }
     this.ready=true;
-    setConn(this.mode, db?"Live · shared with your team":"Not connected · this browser only");
+    setConn(this.mode, {live:"Live · shared with your team",
+                        neon:"Live · shared with your team",
+                        locked:"Locked · team code needed",
+                        local:"Not connected · this browser only"}[this.mode]);
   },
+
   async put(coll,obj){
     obj.updatedAt = new Date().toISOString();
     if(!obj.id) obj.id = uid(coll.slice(0,3));
     S[coll][obj.id]={...obj};
     render();
-    if(this.db){ const {id,...body}=obj;
+    if(this.mode==="live" && this.db){ const {id,...body}=obj;
       try{ await this.db.collection(coll).doc(id).set(body); }
       catch(e){ toast(dbMsg(e),true); }
+    } else if(this.mode==="neon"){
+      this.writing++;
+      try{ await this.api.call({op:"put",collection:coll,id:obj.id,data:obj}); }
+      catch(e){ toast(e.message||"Could not save.",true); }
+      finally{ this.writing--; }
     } else this.writeLocal(coll,S[coll]);
     return obj.id;
   },
-  async putMany(coll,list){
-    for(const o of list) await this.put(coll,o);
-  },
+  async putMany(coll,list){ for(const o of list) await this.put(coll,o); },
+
   async remove(coll,id){
     delete S[coll][id]; render();
-    if(this.db){ try{ await this.db.collection(coll).doc(id).delete(); }catch(e){ toast(dbMsg(e),true); } }
-    else this.writeLocal(coll,S[coll]);
+    if(this.mode==="live" && this.db){
+      try{ await this.db.collection(coll).doc(id).delete(); }catch(e){ toast(dbMsg(e),true); }
+    } else if(this.mode==="neon"){
+      this.writing++;
+      try{ await this.api.call({op:"del",collection:coll,id}); }
+      catch(e){ toast(e.message||"Could not delete.",true); }
+      finally{ this.writing--; }
+    } else this.writeLocal(coll,S[coll]);
   },
+
   async saveSettings(){
     render();
-    if(this.db){ try{ await this.db.doc("config/settings").set({...S.settings}); }catch(e){ toast(dbMsg(e),true); } }
-    else this.writeLocal("settings",S.settings);
+    if(this.mode==="live" && this.db){
+      try{ await this.db.doc("config/settings").set({...S.settings}); }catch(e){ toast(dbMsg(e),true); }
+    } else if(this.mode==="neon"){
+      this.writing++;
+      try{ await this.api.call({op:"put",collection:"config",id:"settings",data:{...S.settings}}); }
+      catch(e){ toast(e.message||"Could not save settings.",true); }
+      finally{ this.writing--; }
+    } else this.writeLocal("settings",S.settings);
   }
 };
 function dbMsg(e){
@@ -733,9 +801,14 @@ function go(tab){ UI.tab=tab; UI.sel.clear(); window.scrollTo({top:0,behavior:"i
 
 function render(){
   if(!Store.ready) return;
+  const v=$("#view");
+  if(Store.mode==="locked"){
+    $("#tabs").innerHTML=""; $("#ribbon").innerHTML="";
+    v.innerHTML=""; v.appendChild(lockScreen()); return;
+  }
   renderTabs(); renderRibbon();
-  const v=$("#view"); v.innerHTML="";
-  if(Store.mode!=="live") v.appendChild(localBanner());
+  v.innerHTML="";
+  if(Store.mode==="local") v.appendChild(localBanner());
   const fn={collabs:viewCollabs,ship:viewShip,content:viewContent,people:viewPeople,
             screening:viewScreening,products:viewProducts,analytics:viewAnalytics,
             setup:viewSetup}[UI.tab]||viewCollabs;
@@ -884,6 +957,33 @@ function viewCollabs(){
       tb))));
   return wrap;
 }
+function lockScreen(){
+  let code="";
+  const err=el("div",{});
+  const go=async btn=>{
+    if(!code.trim()){ err.innerHTML=""; err.appendChild(el("div",{class:"err"},"Type the code your team was given.")); return; }
+    btn.disabled=true; btn.textContent="Checking…";
+    Store.api.setCode(code.trim());
+    Store.ready=false; await Store.init(); render();
+    if(Store.mode==="locked"){
+      btn.disabled=false; btn.textContent="Open the board";
+      err.innerHTML=""; err.appendChild(el("div",{class:"err"},"That code was not accepted. Check it with whoever set the board up."));
+    }
+  };
+  const input=el("input",{type:"password",placeholder:"Team code",autocomplete:"current-password",
+    oninput:e=>{code=e.target.value;},
+    onkeydown:e=>{ if(e.key==="Enter") go(btn); }});
+  const btn=el("button",{class:"btn btn-p",onclick:()=>go(btn)},"Open the board");
+  return el("div",{style:"max-width:420px;margin:12vh auto 0"},
+    el("div",{class:"panel"},
+      el("div",{class:"panel-b"},
+        el("h2",{style:"font-family:var(--display);font-size:20px;font-weight:700;margin-bottom:6px"},"Reel → Doorstep"),
+        el("p",{style:"color:var(--ink-3);font-size:13px;margin:0 0 16px"},
+          "One code for the whole team. It is remembered on this device, so you type it once."),
+        el("label",{class:"f"},el("span",{},"Team code"),input),
+        err,
+        el("div",{style:"margin-top:14px"},btn))));
+}
 async function retryConnect(){
   toast("Reconnecting\u2026");
   Store.ready=false;
@@ -899,10 +999,15 @@ function diagPanel(){
     el("div",{class:"panel-h"},el("div",{},el("h3",{},"Connection details"),
       el("div",{class:"sub"},"What this page can see. Send a screenshot of this if it will not connect.")),
       el("button",{class:"btn btn-sm",style:"margin-left:auto",onclick:retryConnect},"Retry connection")),
-    d.why?el("div",{class:"panel-b",style:"padding-bottom:0"},
-      el("div",{class:"callout crit"},el("b",{},"Why it is not connected: "),d.why)):null,
+    (Store.mode!=="live"&&Store.mode!=="neon")?el("div",{class:"panel-b",style:"padding-bottom:0"},
+      el("div",{class:"callout crit"},el("b",{},"Not connected. "),
+        "Claude artifact database: "+(d.why||"available")+". Data API: "+(d.apiWhy||d.api||"not tried")+".")):null,
     el("div",{class:"tw"},el("table",{},el("tbody",{},
-      row("Shared database",!!d.db),
+      row("Data source",{live:"Claude artifact database",neon:"Neon (this deployment)",
+                          locked:"Neon — team code needed",local:"none — this browser only"}[Store.mode]||Store.mode),
+      row("Shared storage",Store.mode==="live"||Store.mode==="neon"),
+      row("Data API (/api/data)",d.api==="connected"?true:(d.api||"not tried"),"warn"),
+      row("Claude artifact database",!!d.db,"warn"),
       row("AI screening",d.sample===undefined?"still checking":!!d.sample,"warn"),
       row("File downloads",d.downloads===undefined?"still checking":!!d.downloads,"warn"),
       row("window.claude present",!!d.hasClaude),
@@ -917,11 +1022,9 @@ function localBanner(){
     el("div",{class:"panel-b",style:"display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap"},
       el("div",{style:"flex:1;min-width:260px"},
         el("div",{style:"font-family:var(--display);font-weight:700;font-size:15px;color:var(--ink);margin-bottom:4px"},
-          "This page is not on the shared board"),
+          "Nothing here is shared"),
         el("div",{style:"font-size:13px;color:var(--ink-2)"},
-          "Anything you see or type here is stored in this browser only \u2014 your team cannot see it, and the real collabs, influencers and products are not loaded. Open the dashboard from ",
-          el("b",{},"claude.ai"),
-          " (the artifacts list, or the link that was shared with you) rather than a saved file or a direct page address.")),
+          "This copy has no database behind it, so everything you see or type is kept in this browser alone and nobody else can see it. Setup \u2192 Connection details says why.")),
       el("div",{style:"display:flex;gap:8px;flex-wrap:wrap"},
         el("button",{class:"btn btn-sm",onclick:retryConnect},"Retry connection"),
         el("button",{class:"btn btn-sm",onclick:()=>go("setup")},"Why?"),

@@ -61,8 +61,57 @@ changes; **Reset to the UC template** puts back the 73 columns above.
 
 ## Running it
 
-`index.html` is the whole application — no build step, no dependencies.
+`index.html` is the whole application — no build step, no framework. It picks its
+data source at load, in this order:
 
-Published as a Claude Artifact it stores data server-side and both teams see each
-other's changes live. Opened as a plain local file it falls back to browser storage,
-which is per-person and not shared — useful for a look, not for running the programme.
+1. **Claude artifact** — when opened inside the Claude viewer, it uses the artifact's
+   own database, plus AI creator screening and file downloads.
+2. **Neon** — when served from your own deployment, it talks to `/api/data`, which
+   reads and writes a Neon Postgres database.
+3. **Neither** — everything is kept in that browser alone. The page says so plainly
+   rather than pretending to be shared.
+
+Setup → **Connection details** reports which of the three is in play and why.
+
+## Deploying to Vercel with Neon
+
+The page is public, so it can never hold the database credentials. `api/data.js` is a
+serverless function that holds them instead and checks a shared team code first.
+
+1. **Create a Neon project** at neon.tech and copy the connection string. Pick the
+   region nearest your team — Singapore or Mumbai for India.
+2. **In Vercel → Settings → Environment Variables**, add:
+
+   | Name | Value |
+   |---|---|
+   | `DATABASE_URL` | the Neon connection string |
+   | `TEAM_CODE` | any phrase your two teams will type once |
+
+3. **Redeploy.** The table is created on the first request, so there is no migration
+   to run:
+
+   ```sql
+   CREATE TABLE docs (
+     collection  text        NOT NULL,
+     id          text        NOT NULL,
+     data        jsonb       NOT NULL,
+     updated_at  timestamptz NOT NULL DEFAULT now(),
+     PRIMARY KEY (collection, id)
+   );
+   ```
+
+4. **Open the URL and enter the team code.** It is remembered per device, so each
+   person types it once.
+
+Collabs, influencers, SKUs and settings are rows in that one table, keyed by
+collection and id. The page re-reads every 7 seconds while the tab is visible, so
+supply sees a new request within seconds of marketing saving it — near-live rather
+than instant, which is what this workflow needs.
+
+**Without `TEAM_CODE` set, the API is open to anyone with the URL.** Set it.
+
+### What the Neon deployment does not have
+
+AI creator screening and the one-click file save are granted by the Claude viewer, so
+they are absent on your own domain. The engagement maths in the screening drawer
+still runs, and the UC bulk file falls back to an ordinary browser download.

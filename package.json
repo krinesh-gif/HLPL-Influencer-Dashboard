@@ -1,0 +1,10 @@
+{
+  "name": "reel-to-doorstep",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Influencer gifting and supply handoff dashboard for Hivefy Lifestyle",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}
