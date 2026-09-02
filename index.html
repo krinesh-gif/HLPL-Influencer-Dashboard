@@ -74,6 +74,7 @@ a{color:var(--rose)}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}
 .dot.live{background:var(--good)}
 .dot.local{background:var(--warn)}
+.conn.off{background:var(--warn-soft);color:var(--warn);border-radius:99px;padding:3px 10px}
 
 .ribbon{background:var(--surface-2);border-bottom:1px solid var(--line)}
 .ribbon-in{max-width:1480px;margin:0 auto;padding:8px 20px;display:flex;gap:8px;overflow-x:auto;align-items:center}
@@ -475,7 +476,7 @@ const Store = {
       this.saveSettings();
     }
     this.ready=true;
-    setConn(this.mode, db?"Live · shared with your team":"Local to this browser");
+    setConn(this.mode, db?"Live · shared with your team":"Not connected · this browser only");
   },
   async put(coll,obj){
     obj.updatedAt = new Date().toISOString();
@@ -511,7 +512,7 @@ function dbMsg(e){
   return "Could not save. Your change is on screen but not stored — retry in a moment.";
 }
 function setConn(mode,label){
-  const n=$("#conn"); n.innerHTML="";
+  const n=$("#conn"); n.className="conn"+(mode==="live"?"":" off"); n.innerHTML="";
   n.append(el("span",{class:"dot "+(mode==="live"?"live":"local")}), el("span",{},label));
 }
 
@@ -718,6 +719,7 @@ function render(){
   if(!Store.ready) return;
   renderTabs(); renderRibbon();
   const v=$("#view"); v.innerHTML="";
+  if(Store.mode!=="live") v.appendChild(localBanner());
   const fn={collabs:viewCollabs,ship:viewShip,content:viewContent,people:viewPeople,
             screening:viewScreening,products:viewProducts,analytics:viewAnalytics,
             setup:viewSetup}[UI.tab]||viewCollabs;
@@ -865,6 +867,24 @@ function viewCollabs(){
         el("th",{class:["Locked ₹","Views"].includes(h)?"num":""},h)))),
       tb))));
   return wrap;
+}
+function localBanner(){
+  return el("div",{class:"panel",style:"border-color:var(--warn);background:var(--warn-soft);margin-bottom:18px"},
+    el("div",{class:"panel-b",style:"display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap"},
+      el("div",{style:"flex:1;min-width:260px"},
+        el("div",{style:"font-family:var(--display);font-weight:700;font-size:15px;color:var(--ink);margin-bottom:4px"},
+          "This page is not on the shared board"),
+        el("div",{style:"font-size:13px;color:var(--ink-2)"},
+          "Anything you see or type here is stored in this browser only \u2014 your team cannot see it, and the real collabs, influencers and products are not loaded. Open the dashboard from ",
+          el("b",{},"claude.ai"),
+          " (the artifacts list, or the link that was shared with you) rather than a saved file or a direct page address.")),
+      el("button",{class:"btn btn-sm",onclick:clearLocal},"Clear this browser\u2019s data")));
+}
+async function clearLocal(){
+  if(!confirm("Remove everything stored in this browser?\n\nThe shared board is not touched.")) return;
+  for(const c of ["influencers","collabs","skus","settings"]){ try{ localStorage.removeItem("r2d:"+c); }catch(e){} }
+  S.influencers={}; S.collabs={}; S.skus={}; S.settings={...DEFAULT_SETTINGS};
+  render(); toast("This browser\u2019s data cleared");
 }
 function kpi(k,v,d,cls){ return el("div",{class:"kpi "+(cls||"")},
   el("div",{class:"k"},k),el("div",{class:"v"},v),el("div",{class:"d"},d||"")); }
@@ -1357,7 +1377,8 @@ function viewSetup(){
         el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"Storage"),
           el("div",{class:"hint"},Store.mode==="live"
             ? "Live — every change is stored and both teams see it within seconds."
-            : "This browser only. Open the published dashboard link for the shared, live board.")),
+            : "Not connected to the shared board. What you see is stored in this browser alone; open the dashboard from claude.ai to reach the real data."),
+          Store.mode!=="live"?el("button",{class:"btn btn-sm",style:"margin-top:8px",onclick:clearLocal},"Clear this browser\u2019s data"):null),
         el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"AI screening"),
           el("div",{class:"hint"},Sampler
             ? "Available in this view. Each run uses the Claude usage of whoever presses the button."
@@ -2672,13 +2693,6 @@ function normDate(s){
   await Store.init();
   if(window.claude && claude.use)
     claude.use("sample").then(f=>{ Sampler=f; if(Store.ready) render(); }).catch(()=>{});
-  const bare = !Object.keys(S.collabs).length && !Object.keys(S.influencers).length
-            && !Object.keys(S.skus).length;
-  if(bare && !S.settings.seeded){
-    S.settings.seeded = true;
-    await Store.saveSettings();
-    await loadSamples();
-  }
   render();
 })();
 </script>
