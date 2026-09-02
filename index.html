@@ -938,7 +938,9 @@ function viewPeople(){
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Influencer master"),
       el("p",{},"Saved once, reused forever. Repeat a collab and the address, pincode and mobile come along — nobody asks in the group again.")),
-    el("div",{class:"head-actions"},el("button",{class:"btn btn-p",onclick:()=>openInfluencer(null)},"+ Add influencer"))));
+    el("div",{class:"head-actions"},
+      Sampler?el("button",{class:"btn",onclick:()=>openScreen(null)},"Screen a creator with AI"):null,
+      el("button",{class:"btn btn-p",onclick:()=>openInfluencer(null)},"+ Add influencer"))));
 
   const q=UI.q.toLowerCase();
   const list=Object.values(S.influencers).filter(i=>!q||[i.name,i.handle,i.city,i.state,i.pin,i.phone,i.category].join(" ").toLowerCase().includes(q))
@@ -964,12 +966,15 @@ function viewPeople(){
         el("div",{class:"t-sub mono"},digits(i.pin)||"—"),
         probs.length?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},"address incomplete"):null),
       el("td",{class:"mono"},phone10(i.phone)||"—"),
-      el("td",{},i.tier||"—",el("div",{class:"t-sub"},i.category||"")),
+      el("td",{},i.tier||"—",el("div",{class:"t-sub"},i.category||""),
+        i.screen?el("div",{style:"margin-top:4px"},
+          pill(i.screen.verdict,{Go:"good",Negotiate:"warn",Hold:"warn",Pass:"crit"}[i.screen.verdict]||"neutral")):null),
       el("td",{class:"num"},String(cs.length),last?el("div",{class:"t-sub"},"last "+dmy(last)):null),
       el("td",{class:"num"},inrShort(spend)),
       el("td",{class:"num"},v?compact(v):"—"),
       el("td",{class:"nowrap"},
         el("button",{class:"btn btn-sm btn-p",onclick:()=>repeatCollab(i.id)},"Repeat"),
+        Sampler?el("button",{class:"btn btn-sm btn-q",onclick:()=>openScreen(i.id)},"Screen"):null,
         el("button",{class:"btn btn-sm btn-q",onclick:()=>openInfluencer(i.id)},"Edit"))));
   });
   wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
@@ -1387,7 +1392,10 @@ function openCollabDraft(d,id,title,sub,focus){
           el("div",{class:"t-sub mono"},"@"+(inf.handle||"—")+" · "+(inf.tier||"")+" · "+(inf.city||"")),
           el("div",{class:"t-sub"},collabList().filter(c=>c.influencerId===inf.id&&c.id!==d.id).length+" earlier collabs on record")),
         el("button",{class:"btn btn-sm",style:"margin-left:auto",onclick:()=>{d.influencerId="";build();}},"Change"),
-        el("button",{class:"btn btn-sm btn-q",onclick:()=>{d.ship=shipFromInfluencer(inf);build();toast("Saved address pulled in");}},"Pull saved address")));
+        el("button",{class:"btn btn-sm btn-q",onclick:()=>{d.ship=shipFromInfluencer(inf);build();toast("Saved address pulled in");}},"Pull saved address"),
+        Sampler?el("button",{class:"btn btn-sm btn-q",onclick:()=>openScreen(inf.id)},"Screen with AI"):null));
+      if(inf.screen) who.appendChild(el("div",{class:"callout"+(inf.screen.verdict==="Pass"?" crit":inf.screen.verdict==="Go"?"":" warn"),style:"margin-bottom:12px"},
+        el("b",{},"Screened "+dmy(inf.screen.at)+" — "+inf.screen.verdict+". "),inf.screen.headline||""));
     } else {
       let q="";
       const results=el("div",{class:"pickbox"});
@@ -1615,6 +1623,7 @@ function openInfluencer(id){
       i.name=titleCase(i.name); i.phone=phone10(i.phone); i.pin=digits(i.pin);
       await Store.put("influencers",i); api.close(); toast("Saved");}},"Save"));
     if(id) api.foot.appendChild(el("button",{class:"btn btn-s",onclick:()=>{api.close();repeatCollab(id);}},"Start a repeat collab →"));
+    if(id&&Sampler) api.foot.appendChild(el("button",{class:"btn",onclick:()=>{api.close();openScreen(id);}},"Screen with AI"));
     api.foot.appendChild(el("span",{style:"flex:1"}));
     if(id) api.foot.appendChild(el("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
       const n=collabList().filter(c=>c.influencerId===id).length;
@@ -1662,6 +1671,300 @@ function openSkuImport(){
   api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Cancel"));
 }
 </script>
+<script>
+/* ================= AI creator screening =================
+   The page cannot read Instagram. Every number here is entered by the
+   team from the creator's public profile; the arithmetic is done in JS
+   and only the judgement is asked of Claude. ======================== */
+let Sampler=null;
+function sampleErrCopy(code){
+  return ({
+    not_granted:"You declined the request, so screening is off for this visit. Reload the page to be asked again.",
+    sampling_disabled:"AI screening is switched off for this workspace.",
+    not_declared:"AI screening is not enabled on this version of the board.",
+    session_expired:"Your Claude session expired — reload the page and try again.",
+    rate_limited:"Too many screenings at once. Wait a minute and run it again.",
+    prompt_too_large:"Too much pasted text. Trim the captions and comments and run it again.",
+    invalid_json:"The reply came back malformed. Run it again.",
+    refused:"Claude would not answer that. Check the pasted text for anything odd.",
+    empty_completion:"An empty reply came back. Run it again.",
+    upstream_error:"Claude is unreachable right now. Try again in a minute.",
+    cancelled:"Stopped."
+  })[code] || "Screening could not finish. Try again in a minute.";
+}
+const hnum=s=>{
+  s=String(s??"").trim().toLowerCase().replace(/,/g,"");
+  const m=/^([\d.]+)\s*([klmb]?)/.exec(s); if(!m) return 0;
+  const n=parseFloat(m[1]); if(!isFinite(n)) return 0;
+  return Math.round(n*({k:1e3,l:1e5,m:1e6,b:1e9}[m[2]]||1));
+};
+function parsePosts(txt){
+  return String(txt||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(line=>{
+    if(/likes?/i.test(line)&&/comments?/i.test(line)&&!/\d/.test(line)) return null;
+    const p=line.split(/[,\t;|]+|\s{2,}|\s+/).filter(Boolean);
+    if(!p.length||!/\d/.test(p[0])) return null;
+    return {likes:hnum(p[0]),comments:hnum(p[1]),views:hnum(p[2])};
+  }).filter(Boolean);
+}
+function screenMath(f){
+  const posts=parsePosts(f.postsRaw), n=posts.length;
+  const avg=k=>n?posts.reduce((s,p)=>s+num(p[k]),0)/n:0;
+  const aL=avg("likes"), aC=avg("comments"), aV=avg("views");
+  const fol=num(f.followers);
+  const vs=posts.map(p=>num(p.views)).filter(v=>v>0);
+  const mean=vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:0;
+  const sd=vs.length>1?Math.sqrt(vs.reduce((s,v)=>s+(v-mean)**2,0)/(vs.length-1)):0;
+  return {posts,n,avgLikes:aL,avgComments:aC,avgViews:aV,
+    erFollowers:fol?((aL+aC)/fol*100):0,
+    erViews:aV?((aL+aC)/aV*100):0,
+    commentRatio:aL?(aC/aL*100):0,
+    viewMultiple:fol?(aV/fol):0,
+    viewCV:mean?(sd/mean*100):0,
+    projCPV:(aV&&num(f.quote))?num(f.quote)/aV:0,
+    projCPM:(aV&&num(f.quote))?num(f.quote)/aV*1000:0};
+}
+function openScreen(infId){
+  const inf=infId?S.influencers[infId]:null;
+  const f={handle:(inf&&inf.handle)||"",followers:(inf&&inf.followers)||"",
+    city:inf?[inf.city,inf.state].filter(Boolean).join(", "):"",category:(inf&&inf.category)||CATEGORIES[0],
+    tier:(inf&&inf.tier)||TIERS[1],platform:(inf&&inf.platform)||"Instagram",
+    quote:"",postsRaw:"",bio:"",comments:""};
+  let result=(inf&&inf.screen)||null, busy=false, ctl=null, mail="";
+  const api=drawer("Screen a creator",
+    inf?("@"+(inf.handle||inf.name)+" · judgement layer only — the numbers are yours"):"Paste what the profile shows; the maths is done here, the read is Claude's",()=>{});
+
+  const out=el("div",{});
+  const build=()=>{
+    api.body.innerHTML=""; api.foot.innerHTML="";
+    if(!Sampler){
+      api.body.appendChild(el("div",{class:"callout crit"},el("b",{},"AI screening is unavailable in this view. "),
+        "It runs on the published board when your Claude account allows it. The numbers below are still computed for you."));
+    }
+    api.body.appendChild(el("div",{class:"callout"},el("b",{},"This board cannot read Instagram. "),
+      "Paste what you can see on the profile — the engagement maths is computed here from your numbers, and only the judgement call is asked of Claude."));
+
+    api.body.appendChild(section("The profile","lane-m",el("div",{class:"grid2"},
+      field("Handle",input(f.handle,v=>{f.handle=cleanHandle(v);}),{req:true}),
+      field("Platform",select(f.platform,PLATFORMS,v=>{f.platform=v;})),
+      field("Followers",input(f.followers,v=>{f.followers=hnum(v);redraw();},{placeholder:"e.g. 48000 or 48k"}),{req:true}),
+      field("Tier",select(f.tier,TIERS,v=>{f.tier=v;})),
+      field("Category",select(f.category,CATEGORIES,v=>{f.category=v;})),
+      field("City / state",input(f.city,v=>{f.city=v;})),
+      field("Their quoted price (₹)",input(f.quote,v=>{f.quote=num(v);redraw();},{type:"number",min:"0",
+        placeholder:"Leave blank if not quoted yet"}),{span:true}))));
+
+    const metrics=el("div",{});
+    api.body.appendChild(section("Recent posts","lane-m",
+      field("Last 6–12 reels — likes, comments, views (one per line)",
+        el("textarea",{rows:7,placeholder:"9100, 412, 184000\n7400, 355, 141000\n11200, 610, 226000",
+          oninput:e=>{f.postsRaw=e.target.value;redraw();}},f.postsRaw),
+        {hint:"Commas, tabs or spaces all work. 1.2k and 1.8L are understood. Views can be left off for static posts."}),
+      metrics));
+    const redraw=()=>{
+      const m=screenMath(f); metrics.innerHTML="";
+      if(!m.n){ metrics.appendChild(el("div",{class:"hint",style:"margin-top:10px"},"Paste at least three posts to get a reliable read.")); return; }
+      const rows=[
+        ["Posts sampled",String(m.n),""],
+        ["Avg likes",compact(m.avgLikes),""],
+        ["Avg comments",compact(m.avgComments),""],
+        ["Avg views",m.avgViews?compact(m.avgViews):"—",""],
+        ["ER on followers",m.erFollowers.toFixed(2)+"%","(likes + comments) ÷ followers"],
+        ["ER on views",m.erViews?m.erViews.toFixed(2)+"%":"—","(likes + comments) ÷ views"],
+        ["Comments per 100 likes",m.commentRatio.toFixed(1),"very low can mean bought likes"],
+        ["Views per follower",m.viewMultiple?m.viewMultiple.toFixed(2)+"×":"—","above 1× means it travels beyond the following"],
+        ["View consistency",m.viewCV?("±"+m.viewCV.toFixed(0)+"%"):"—","spread across the sampled reels"],
+        ["Projected CPV",m.projCPV?"₹"+m.projCPV.toFixed(2):"—","at their quoted price"],
+        ["Projected CPM",m.projCPM?"₹"+Math.round(m.projCPM):"—","per 1000 views"]
+      ];
+      const tb=el("tbody",{});
+      rows.forEach(([k,v,note])=>tb.appendChild(el("tr",{},
+        el("td",{},k,note?el("div",{class:"t-sub"},note):null),
+        el("td",{class:"num",style:"font-weight:600"},v))));
+      metrics.appendChild(el("div",{style:"margin-top:12px"},el("div",{class:"panel"},
+        el("div",{class:"panel-h"},el("h3",{},"Computed here, not guessed"),
+          el("div",{class:"sub"},"Plain arithmetic on the numbers you pasted")),
+        el("div",{class:"tw"},el("table",{},tb)))));
+    };
+    redraw();
+
+    api.body.appendChild(section("Context for the read","lane-m",
+      field("Bio and a few recent captions",el("textarea",{rows:4,
+        placeholder:"Paste the bio and 3–4 captions. Paid partnership tags and brand mentions are what reveal past collabs.",
+        oninput:e=>{f.bio=e.target.value;}},f.bio)),
+      el("div",{style:"height:12px"}),
+      field("Top comments on a recent reel",el("textarea",{rows:4,
+        placeholder:"Paste 10–15 comments. Real questions about the product read very differently from emoji strings.",
+        oninput:e=>{f.comments=e.target.value;}},f.comments))));
+
+    api.body.appendChild(out);
+    if(result) drawResult(result);
+
+    if(Sampler){
+      const runBtn=el("button",{class:"btn btn-p",disabled:busy?true:null,onclick:run},busy?"Screening…":(result?"Screen again":"Screen this creator"));
+      api.foot.appendChild(runBtn);
+      if(busy) api.foot.appendChild(el("button",{class:"btn",onclick:()=>{ctl&&ctl.abort();}},"Stop"));
+    }
+    if(result&&infId) api.foot.appendChild(el("button",{class:"btn",onclick:async()=>{
+      await Store.put("influencers",{...S.influencers[infId],followers:num(f.followers),screen:result});
+      toast("Screening saved to the influencer record");}},"Save to influencer"));
+    if(result&&Sampler) api.foot.appendChild(el("button",{class:"btn btn-s",disabled:busy?true:null,onclick:draftMail},"Draft outreach mail"));
+    api.foot.appendChild(el("span",{style:"flex:1"}));
+    api.foot.appendChild(el("button",{class:"btn btn-q btn-sm",onclick:api.close},"Close"));
+  };
+
+  function promptFor(m){
+    return [
+"You are screening a creator for a paid reel + product-gifting collab for Aravi Organic,",
+"an Indian D2C beauty and personal-care brand (skincare, haircare, body care; MRPs roughly",
+"₹300–₹1300; sold on Amazon, Flipkart, Myntra, Nykaa, Meesho and its own Shopify store).",
+"",
+"Every number below was typed in by the marketing team from the creator's public profile,",
+"and the ratios were computed arithmetically — treat them as given. You cannot browse.",
+"Where the evidence is thin, lower your confidence rather than inventing detail. Never",
+"state a follower demographic, a past brand deal or an audience location that is not",
+"visible in the pasted text.",
+"",
+"CREATOR",
+"handle: @"+(f.handle||"unknown"),
+"platform: "+f.platform+"   tier: "+f.tier+"   category: "+f.category,
+"location: "+(f.city||"not given"),
+"followers: "+(num(f.followers)||"not given"),
+"their quoted price: "+(num(f.quote)?("₹"+num(f.quote)):"not quoted yet"),
+"",
+"COMPUTED FROM "+m.n+" RECENT POSTS",
+"avg likes: "+Math.round(m.avgLikes)+"   avg comments: "+Math.round(m.avgComments)+"   avg views: "+Math.round(m.avgViews),
+"engagement rate on followers: "+m.erFollowers.toFixed(2)+"%",
+"engagement rate on views: "+(m.erViews?m.erViews.toFixed(2)+"%":"not available"),
+"comments per 100 likes: "+m.commentRatio.toFixed(1),
+"views per follower: "+(m.viewMultiple?m.viewMultiple.toFixed(2):"not available"),
+"view spread across the sampled reels: "+(m.viewCV?("±"+m.viewCV.toFixed(0)+"%"):"not available"),
+"projected cost per view at their quote: "+(m.projCPV?("₹"+m.projCPV.toFixed(2)):"not available"),
+"",
+"BIO AND CAPTIONS",
+(f.bio||"(none pasted)").slice(0,3000),
+"",
+"TOP COMMENTS",
+(f.comments||"(none pasted)").slice(0,3000),
+"",
+"Judge fit, whether the engagement looks earned, and what this is worth to a beauty brand",
+"buying reach in India. Price in rupees against the projected views, not against follower",
+"count. Reply with only this JSON object:",
+'{"verdict":"Go"|"Negotiate"|"Hold"|"Pass","confidence":"high"|"medium"|"low","fitScore":0-100,',
+'"headline":"one sentence a founder can act on","fairPriceLow":number,"fairPriceHigh":number,',
+'"priceRationale":"one sentence naming the ₹ per 1000 views you used",',
+'"authenticity":"is the engagement earned, and what in the data says so",',
+'"audienceRead":"who appears to be watching, from the captions and comments",',
+'"brandCollabs":["brand or product category visible in the pasted captions"],',
+'"strengths":["..."],"risks":["..."],"askBeforeLocking":["question to put to the creator"],',
+'"suggestedDeliverable":"...","suggestedProducts":["Aravi product type that suits this audience"]}',
+"Every string under 200 characters. Use [] where the pasted text shows nothing."
+    ].join("\n");
+  }
+  async function run(){
+    const m=screenMath(f);
+    if(!num(f.followers)){ toast("Follower count is needed for the maths",true); return; }
+    if(m.n<3){ toast("Paste at least three recent posts",true); return; }
+    busy=true; mail=""; build();
+    out.innerHTML=""; out.appendChild(el("div",{class:"callout"},"Thinking… a full read takes up to a minute."));
+    ctl=new AbortController();
+    try{
+      const r=await Sampler.json(promptFor(m),{signal:ctl.signal,modelTier:"default"});
+      result={...r,at:new Date().toISOString(),
+        er:+m.erFollowers.toFixed(2),erViews:+m.erViews.toFixed(2),avgViews:Math.round(m.avgViews),
+        sampled:m.n,quoted:num(f.quote)};
+      busy=false; build();
+    }catch(e){
+      busy=false; build();
+      out.innerHTML=""; out.appendChild(el("div",{class:"callout crit"},sampleErrCopy(e&&e.code)));
+    }
+  }
+  async function draftMail(){
+    busy=true; build();
+    const box=el("div",{class:"panel",style:"margin-top:14px"},
+      el("div",{class:"panel-h"},el("h3",{},"Outreach and T&C mail")),
+      el("div",{class:"panel-b"},el("div",{class:"hint"},"Thinking…")));
+    out.appendChild(box);
+    const body=box.querySelector(".panel-b");
+    ctl=new AbortController();
+    const p=["Write the first outreach email from Aravi Organic (Hivefy Lifestyle Pvt Ltd), an Indian D2C beauty brand,",
+      "to the creator @"+(f.handle||"")+" ("+f.tier+", "+f.category+", "+(f.city||"India")+").",
+      "Offer: "+(result.suggestedDeliverable||"one Instagram reel")+", products shipped free, fee of ₹"+
+        (result.fairPriceLow||"")+"–₹"+(result.fairPriceHigh||"")+" negotiable.",
+      "Indian business English, warm but brief, no exclamation marks, no emoji, no hype adjectives.",
+      "Structure: subject line, two short paragraphs, then a compact numbered list of terms covering",
+      "deliverable and format, usage rights for paid ads (90 days), posting window, revision policy,",
+      "payment terms and timeline, disclosure requirement (#ad / paid partnership tag), and a line asking",
+      "them to reply 'confirmed' on this thread so the terms are on record. End asking for their",
+      "shipping address, pincode and mobile number. Under 300 words. Plain text only."].join("\n");
+    try{
+      await Sampler(p,{signal:ctl.signal,onText:({text})=>{
+        body.innerHTML="";
+        body.appendChild(el("pre",{style:"white-space:pre-wrap;font-family:var(--sans);font-size:13px;margin:0"},text));
+      }});
+      mail=body.textContent;
+      body.appendChild(el("div",{style:"margin-top:12px"},
+        el("button",{class:"btn btn-sm",onclick:()=>copyText(mail)},"Copy mail")));
+    }catch(e){
+      body.innerHTML=""; body.appendChild(el("div",{class:"hint",style:"color:var(--crit)"},sampleErrCopy(e&&e.code)));
+    }
+    busy=false; build();
+  }
+  function drawResult(r){
+    const tone={Go:"good",Negotiate:"warn",Hold:"warn",Pass:"crit"}[r.verdict]||"neutral";
+    const box=el("div",{class:"panel",style:"margin-bottom:14px"});
+    box.appendChild(el("div",{class:"panel-h"},
+      el("h3",{},"Claude's read"),
+      el("div",{style:"margin-left:auto;display:flex;gap:8px;align-items:center"},
+        pill(r.verdict||"—",tone),
+        el("span",{class:"tag"},(r.confidence||"")+" confidence"))));
+    const b=el("div",{class:"panel-b"});
+    if(r.headline) b.appendChild(el("p",{style:"margin:0 0 14px;font-size:15px;font-weight:600;line-height:1.45"},r.headline));
+    const fit=Math.max(0,Math.min(100,num(r.fitScore)));
+    b.appendChild(el("div",{style:"margin-bottom:14px"},
+      el("div",{style:"display:flex;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px"},
+        el("span",{},"Fit with the Aravi range"),el("span",{class:"mono"},fit+"/100")),
+      el("div",{style:"height:8px;border-radius:4px;background:var(--surface-3);overflow:hidden"},
+        el("div",{style:"height:100%;border-radius:4px;width:"+fit+"%;background:var(--"+(fit>=70?"good":fit>=45?"warn":"crit")+")"}))));
+    if(num(r.fairPriceLow)||num(r.fairPriceHigh)){
+      const q=num(r.quoted);
+      b.appendChild(el("div",{class:"callout"+(q&&q>num(r.fairPriceHigh)?" warn":"")},
+        el("b",{},"Worth ₹"+Math.round(num(r.fairPriceLow)).toLocaleString("en-IN")+"–₹"+Math.round(num(r.fairPriceHigh)).toLocaleString("en-IN")),
+        q?(" · they quoted "+inr(q)+(q>num(r.fairPriceHigh)?" — above the band":q<num(r.fairPriceLow)?" — below the band":" — inside the band")):"",
+        r.priceRationale?el("div",{style:"margin-top:5px"},r.priceRationale):null));
+    }
+    const listBlock=(title,items,color)=>{
+      if(!Array.isArray(items)||!items.length) return null;
+      return el("div",{},el("div",{style:"font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:"+(color||"var(--ink-3)")+";margin-bottom:6px"},title),
+        el("ul",{style:"margin:0 0 14px 18px;padding:0;font-size:13px;line-height:1.6"},...items.slice(0,6).map(x=>el("li",{},String(x)))));
+    };
+    if(r.authenticity) b.appendChild(el("div",{style:"margin-bottom:14px"},
+      el("div",{style:"font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px"},"Is the engagement earned"),
+      el("div",{style:"font-size:13px"},r.authenticity)));
+    if(r.audienceRead) b.appendChild(el("div",{style:"margin-bottom:14px"},
+      el("div",{style:"font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px"},"Who is watching"),
+      el("div",{style:"font-size:13px"},r.audienceRead)));
+    b.appendChild(el("div",{class:"grid2"},
+      listBlock("Strengths",r.strengths,"var(--good)")||el("div",{}),
+      listBlock("Risks",r.risks,"var(--crit)")||el("div",{})));
+    if(Array.isArray(r.brandCollabs)&&r.brandCollabs.length)
+      b.appendChild(el("div",{style:"margin-bottom:14px"},
+        el("div",{style:"font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px"},"Brand collabs visible in the captions"),
+        el("div",{},...r.brandCollabs.slice(0,8).map(x=>el("span",{class:"tag",style:"margin:0 6px 6px 0"},String(x))))));
+    b.appendChild(listBlock("Ask before you lock",r.askBeforeLocking)||el("div",{}));
+    if(r.suggestedDeliverable||(Array.isArray(r.suggestedProducts)&&r.suggestedProducts.length))
+      b.appendChild(el("div",{class:"callout"},
+        r.suggestedDeliverable?el("div",{},el("b",{},"Suggested deliverable: "),r.suggestedDeliverable):null,
+        (Array.isArray(r.suggestedProducts)&&r.suggestedProducts.length)
+          ? el("div",{style:"margin-top:4px"},el("b",{},"Send: "),r.suggestedProducts.join(", ")):null));
+    b.appendChild(el("div",{class:"hint",style:"margin-top:12px"},
+      "A judgement from the numbers and text your team pasted on "+dmy(r.at)+", not a measurement of the account. Verify anything that changes the price."));
+    box.appendChild(b);
+    out.innerHTML=""; out.appendChild(box);
+  }
+  build();
+}
+</script>
+
 <script>
 /* ================= bulk build + paste back ================= */
 function openBulkBuild(){
@@ -1787,6 +2090,8 @@ function normDate(s){
   $("#view").appendChild(el("div",{class:"empty"},el("h4",{},"Loading the board…"),
     el("p",{},"Fetching collabs, influencers and your Unicommerce settings.")));
   await Store.init();
+  if(window.claude && claude.use)
+    claude.use("sample").then(f=>{ Sampler=f; if(Store.ready) render(); }).catch(()=>{});
   if(!Object.keys(S.collabs).length && !Object.keys(S.influencers).length){
     await loadSamples();
   }
