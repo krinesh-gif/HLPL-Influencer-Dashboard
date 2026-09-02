@@ -1059,6 +1059,8 @@ function viewPeople(){
 /* ================= VIEW: Products ================= */
 function viewProducts(){
   const wrap=el("div",{});
+  const list0=Object.values(S.skus);
+  const noMrp=list0.filter(x=>!num(x.mrp)).length;
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Product master"),
       el("p",{},"The SKU codes exactly as they sit in Unicommerce. Marketing picks from this list, so no bulk upload ever fails on a typed SKU.")),
@@ -1066,25 +1068,39 @@ function viewProducts(){
       el("button",{class:"btn",onclick:openSkuImport},"Paste SKU list"),
       el("button",{class:"btn btn-p",onclick:()=>openSku(null)},"+ Add SKU"))));
 
-  const list=Object.values(S.skus).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
-  if(!list.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("No SKUs yet",
-    "Export your item master from Unicommerce and paste it in — code, name, MRP.",
+  if(!list0.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("No SKUs yet",
+    "Export the item master from Unicommerce and paste it in \u2014 the export's own columns are read automatically.",
     el("button",{class:"btn btn-p",style:"margin-top:14px",onclick:openSkuImport},"Paste SKU list")))); return wrap; }
 
+  if(noMrp) wrap.appendChild(el("div",{class:"callout warn"},
+    el("b",{},noMrp+" SKU"+(noMrp>1?"s have":" has")+" no MRP. "),
+    "The UC file writes Selling Price and Discount from MRP, so those lines go out at \u20b90 and the invoice carries no value. Add the MRPs before shipping."));
+
+  const q=UI.q.toLowerCase();
+  const list=list0.filter(x=>!q||[x.code,x.name,x.hsn,x.ean].join(" ").toLowerCase().includes(q))
+    .sort((a,b)=>String(a.name||a.code).localeCompare(String(b.name||b.code)));
+  wrap.appendChild(el("div",{class:"filters"},
+    el("input",{class:"search",type:"search",placeholder:"Search SKU code, product, HSN or EAN\u2026",value:UI.q,
+      oninput:e=>{UI.q=e.target.value;render();}}),
+    el("span",{class:"hint"},list.length+" of "+list0.length+" shown")));
+
   const tb=el("tbody",{});
-  list.forEach(s=>{
-    const used=collabList().filter(c=>(c.items||[]).some(i=>i.sku===s.code)).length;
+  list.forEach(x=>{
+    const used=collabList().filter(c=>(c.items||[]).some(i=>i.sku===x.code)).length;
     tb.appendChild(el("tr",{},
-      el("td",{class:"mono"},s.code, s.sample?el("span",{class:"tag",style:"margin-left:6px"},"sample"):null),
-      el("td",{},s.name),
-      el("td",{class:"num"},inr(s.mrp)),
-      el("td",{},s.active===false?pill("Inactive","neutral"):pill("Active","good")),
+      el("td",{},el("button",{class:"linkish",onclick:()=>openSku(x.id)},x.name||x.code),
+        x.sample?el("div",{style:"margin-top:4px"},el("span",{class:"tag"},"sample")):null),
+      el("td",{class:"mono",style:"font-size:12px"},x.code),
+      el("td",{class:"num"},num(x.mrp)?inr(x.mrp):pill("no MRP","warn")),
+      el("td",{class:"mono",style:"font-size:12px"},x.hsn||"\u2014"),
+      el("td",{class:"mono",style:"font-size:12px"},x.ean||"\u2014"),
+      el("td",{},x.active===false?pill("Inactive","neutral"):pill("Active","good")),
       el("td",{class:"num"},String(used)),
-      el("td",{class:"nowrap"},el("button",{class:"btn btn-sm btn-q",onclick:()=>openSku(s.id)},"Edit"))));
+      el("td",{class:"nowrap"},el("button",{class:"btn btn-sm btn-q",onclick:()=>openSku(x.id)},"Edit"))));
   });
   wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
-    el("thead",{},el("tr",{},el("th",{},"SKU code"),el("th",{},"Product"),el("th",{class:"num"},"MRP"),
-      el("th",{},"Status"),el("th",{class:"num"},"Used in"),el("th",{},""))),tb))));
+    el("thead",{},el("tr",{},el("th",{},"Product"),el("th",{},"SKU code"),el("th",{class:"num"},"MRP"),
+      el("th",{},"HSN"),el("th",{},"EAN"),el("th",{},"Status"),el("th",{class:"num"},"Used in"),el("th",{},""))),tb))));
   return wrap;
 }
 </script>
@@ -1720,13 +1736,17 @@ function openInfluencer(id){
   build();
 }
 function openSku(id){
-  const s=id?{...S.skus[id]}:{id:"",code:"",name:"",mrp:0,active:true,createdAt:todayISO()};
+  const s=id?{...S.skus[id]}:{id:"",code:"",name:"",mrp:0,hsn:"",ean:"",image:"",active:true,createdAt:todayISO()};
   const api=drawer(id?s.code:"Add SKU",id?s.name:"Exactly as it reads in Unicommerce",()=>{});
   api.body.appendChild(el("div",{class:"grid2"},
     field("SKU code",input(s.code,v=>{s.code=v.trim();}),{req:true,hint:"Copy-paste from UC — a typed code fails the upload."}),
     field("Product name",input(s.name,v=>{s.name=v;}),{req:true}),
-    field("MRP (₹)",input(s.mrp,v=>{s.mrp=num(v);},{type:"number",min:"0"})),
-    field("Status",select(s.active===false?"0":"1",[["1","Active"],["0","Inactive"]],v=>{s.active=v==="1";}))));
+    field("MRP (₹)",input(s.mrp,v=>{s.mrp=num(v);},{type:"number",min:"0"}),
+      {hint:"Used as Selling Price and Discount in the UC file."}),
+    field("Status",select(s.active===false?"0":"1",[["1","Active"],["0","Inactive"]],v=>{s.active=v==="1";})),
+    field("HSN code",input(s.hsn,v=>{s.hsn=v.trim();})),
+    field("EAN / barcode",input(s.ean,v=>{s.ean=v.trim();})),
+    field("Image URL",input(s.image,v=>{s.image=v.trim();}),{span:true})));
   api.foot.appendChild(el("button",{class:"btn btn-p",onclick:async()=>{
     if(!s.code.trim()){toast("SKU code is needed",true);return;}
     await Store.put("skus",s); api.close(); toast("Saved");}},"Save"));
@@ -1734,29 +1754,102 @@ function openSku(id){
   if(id) api.foot.appendChild(el("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
     if(confirm("Delete this SKU?")){await Store.remove("skus",id);api.close();}}},"Delete"));
 }
-function openSkuImport(){
-  let txt="";
-  const api=drawer("Paste your SKU list","One per line: code, product name, MRP",()=>{});
-  api.body.appendChild(el("div",{class:"callout"},"Export the item master from Unicommerce (or copy the columns out of Excel) and paste here. Commas or tabs both work. Existing codes are updated, not duplicated."));
-  api.body.appendChild(field("SKU rows",el("textarea",{rows:12,
-    placeholder:"ARV-CBS-100, Coffee Body Scrub 100g, 399\nARV-VCS-30, Vitamin C Face Serum 30ml, 599",
-    oninput:e=>{txt=e.target.value;}})));
-  api.foot.appendChild(el("button",{class:"btn btn-p",onclick:async()=>{
-    const lines=txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-    if(!lines.length){toast("Nothing pasted",true);return;}
-    let added=0,updated=0;
-    for(const line of lines){
-      const sep=line.includes("\t")?"\t":",";
-      const p=line.split(sep).map(x=>x.trim().replace(/^"|"$/g,""));
-      const code=p[0]; if(!code||/^sku/i.test(code)&&/name/i.test(p[1]||"")) continue;
-      const found=Object.values(S.skus).find(s=>s.code.toLowerCase()===code.toLowerCase());
-      if(found){ await Store.put("skus",{...found,name:p[1]||found.name,mrp:p[2]!==undefined?num(p[2]):found.mrp}); updated++; }
-      else { await Store.put("skus",{id:uid("sku"),code,name:p[1]||code,mrp:num(p[2]),active:true,createdAt:todayISO()}); added++; }
-    }
-    api.close(); toast(added+" added, "+updated+" updated");
-  }},"Import SKUs"));
-  api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Cancel"));
+/* Reads a Unicommerce item-master export, or any code/name/MRP list.
+   Columns are matched by header name so column order does not matter. */
+function csvLine(line,sep){
+  const out=[]; let cur="",q=false;
+  for(let i=0;i<line.length;i++){ const ch=line[i];
+    if(q){ if(ch==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else if(ch==='"') q=true;
+    else if(ch===sep){ out.push(cur); cur=""; }
+    else cur+=ch;
+  }
+  out.push(cur); return out.map(x=>x.trim());
 }
+function parseSkuList(txt){
+  const lines=String(txt||"").split(/\r?\n/).map(l=>l.replace(/\s+$/,"")).filter(l=>l.trim());
+  if(!lines.length) return {rows:[],cols:null};
+  const sep=lines[0].includes("\t")?"\t":",";
+  const head=csvLine(lines[0],sep).map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,""));
+  const find=(...keys)=>{ for(const k of keys){ const i=head.indexOf(k); if(i>=0) return i; }
+    for(const k of keys){ const i=head.findIndex(h=>h.includes(k)); if(i>=0) return i; } return -1; };
+  const idx={code:find("skucode","sellerskucode","sku","itemcode","code"),
+             name:find("itemname","productname","name","description","product"),
+             mrp:find("mrp","maximumretailprice","sellingprice","price"),
+             hsn:find("hsncode","hsn"),
+             ean:find("ean","barcode","upc","gtin")};
+  const hasHeader = idx.code>=0 && idx.name>=0;
+  const body = hasHeader ? lines.slice(1) : lines;
+  const rows=[];
+  body.forEach(line=>{
+    const p=csvLine(line,sep);
+    const code = hasHeader ? p[idx.code] : p[0];
+    if(!code) return;
+    if(/^(sku|item)\s*code$/i.test(code)) return;
+    rows.push({code,
+      name: (hasHeader ? p[idx.name] : p[1]) || code,
+      mrp:  num(hasHeader ? (idx.mrp>=0?p[idx.mrp]:"") : p[2]),
+      hsn:  hasHeader && idx.hsn>=0 ? p[idx.hsn] : "",
+      ean:  hasHeader && idx.ean>=0 ? p[idx.ean] : ""});
+  });
+  return {rows, cols: hasHeader ? csvLine(lines[0],sep) : null};
+}
+function openSkuImport(){
+  let txt="", parsed={rows:[],cols:null};
+  const api=drawer("Paste your SKU list","Straight from the Unicommerce item master, or code / name / MRP per line",()=>{});
+  const preview=el("div",{});
+  const redraw=()=>{
+    parsed=parseSkuList(txt); preview.innerHTML="";
+    if(!parsed.rows.length){ preview.appendChild(el("div",{class:"hint"},"Nothing parsed yet.")); foot(); return; }
+    const known=Object.values(S.skus);
+    const isNew=r=>!known.some(k=>String(k.code).toLowerCase()===String(r.code).toLowerCase());
+    const fresh=parsed.rows.filter(isNew).length;
+    const noMrp=parsed.rows.filter(r=>!num(r.mrp)).length;
+    preview.appendChild(el("div",{class:"callout"},
+      el("b",{},parsed.rows.length+" rows read · "+fresh+" new, "+(parsed.rows.length-fresh)+" already in the master. "),
+      parsed.cols?("Columns matched by name: "+parsed.cols.join(", ")):"No header row found, so read as code, name, MRP."));
+    if(noMrp) preview.appendChild(el("div",{class:"callout warn"},
+      el("b",{},noMrp+" of these carry no MRP. "),
+      "They import fine, but add the MRPs before shipping — the UC file takes Selling Price and Discount from it."));
+    const tb=el("tbody",{});
+    parsed.rows.slice(0,60).forEach(r=>tb.appendChild(el("tr",{},
+      el("td",{class:"mono",style:"font-size:12px"},r.code),
+      el("td",{},r.name),
+      el("td",{class:"num"},num(r.mrp)?inr(r.mrp):"—"),
+      el("td",{class:"mono",style:"font-size:12px"},r.hsn||"—"),
+      el("td",{class:"mono",style:"font-size:12px"},r.ean||"—"),
+      el("td",{},isNew(r)?pill("new","good"):pill("update","neutral")))));
+    preview.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
+      el("thead",{},el("tr",{},el("th",{},"SKU code"),el("th",{},"Product"),el("th",{class:"num"},"MRP"),
+        el("th",{},"HSN"),el("th",{},"EAN"),el("th",{},""))),tb))));
+    if(parsed.rows.length>60) preview.appendChild(el("div",{class:"hint"},"Showing the first 60 of "+parsed.rows.length+"."));
+    foot();
+  };
+  const foot=()=>{
+    api.foot.innerHTML="";
+    api.foot.appendChild(el("button",{class:"btn btn-p",disabled:parsed.rows.length?null:true,onclick:async()=>{
+      let added=0,updated=0;
+      for(const r of parsed.rows){
+        const found=Object.values(S.skus).find(x=>String(x.code).toLowerCase()===String(r.code).toLowerCase());
+        if(found){ await Store.put("skus",{...found,name:r.name||found.name,
+          mrp:num(r.mrp)||num(found.mrp),hsn:r.hsn||found.hsn||"",ean:r.ean||found.ean||""}); updated++; }
+        else { await Store.put("skus",{id:uid("sku"),code:r.code,name:r.name,mrp:num(r.mrp),
+          hsn:r.hsn||"",ean:r.ean||"",image:"",active:true,createdAt:todayISO()}); added++; }
+      }
+      api.close(); toast(added+" added, "+updated+" updated");
+    }},"Import "+(parsed.rows.length||"")+" SKUs"));
+    api.foot.appendChild(el("span",{style:"flex:1"}));
+    api.foot.appendChild(el("button",{class:"btn btn-q btn-sm",onclick:api.close},"Cancel"));
+  };
+  api.body.appendChild(el("div",{class:"callout"},
+    "In Unicommerce open ",el("b",{},"Catalogue → Item Master"),", export the list and paste the whole thing here — header row included. Commas or tabs both work, and the columns are matched by their names. Existing SKU codes are updated, not duplicated."));
+  api.body.appendChild(field("SKU rows",el("textarea",{rows:9,
+    placeholder:"Item Name,Sku Code,HSN Code,EAN,Image\nAravi Organic Rosemary Shampoo - 200 ml,AO/Shmp/Rosemary/200,33051090,8906140850722,",
+    oninput:e=>{txt=e.target.value;redraw();}})));
+  api.body.appendChild(preview);
+  redraw();
+}
+
 </script>
 <script>
 /* ================= raw address parser =================
@@ -2476,6 +2569,10 @@ function openBulkBuild(){
   }
   const {csv,assigned}=buildUCFile(clean);
   const lines = clean.reduce((s,c)=>s+(c.items||[]).length,0);
+  const zero=[...new Set(clean.flatMap(c=>(c.items||[]).filter(i=>!num(i.mrp)).map(i=>i.sku)))];
+  if(zero.length) api.body.appendChild(el("div",{class:"callout warn"},
+    el("b",{},zero.length+" SKU"+(zero.length>1?"s go":" goes")+" out at ₹0. "),
+    "No MRP on record for "+zero.join(", ")+", so Selling Price and Discount are both blank and the invoice carries no value. Set the MRP under Products first."));
   api.body.appendChild(el("div",{class:"callout"},
     el("b",{},clean.length+" orders · "+lines+" item rows across "+(S.settings.ucColumns||[]).length+" columns. "),
     "All five mandatory columns are filled: sales order code, COD (0, prepaid), sale order item code, shipping method (",
