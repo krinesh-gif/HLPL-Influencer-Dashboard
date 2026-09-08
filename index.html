@@ -166,13 +166,47 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .kpi.supply .v{color:var(--teal)}
 
 /* ---------- charts ---------- */
-.qs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.qs-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
 @media (max-width:900px){.qs-grid{grid-template-columns:1fr}}
-.qs-line{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--surface-2)}
-.qs-line-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-.qs-raw{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
-.qs-pick{display:grid;grid-template-columns:1fr 74px;gap:8px;margin-bottom:6px}
-.qs-remember{display:flex;gap:7px;align-items:center;font-size:11.5px;color:var(--ink-3);margin-top:4px}
+.qs .view-head h1{font-size:20px}
+.qs .view-head p{font-size:12.5px}
+.qs .panel-h{padding:8px 12px}
+.qs .panel-h h3{font-size:13px}
+.qs .panel-b{padding:10px 12px}
+.qs .panel-b>textarea{margin-bottom:8px}
+.qs label.f>span{font-size:10px;margin-bottom:2px}
+.qs input,.qs select{padding:5px 8px;font-size:12.5px}
+.qs textarea{font-size:12px;line-height:1.5}
+.qs-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.qs-fields .span2{grid-column:span 3}
+@media (max-width:560px){.qs-fields{grid-template-columns:1fr 1fr}.qs-fields .span2{grid-column:span 2}}
+.qs-meta{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}
+.qs-meta .span2{grid-column:1/-1}
+@media (max-width:900px){.qs-meta{grid-template-columns:repeat(3,1fr)}}
+.qs-note{font-size:11.5px;line-height:1.45;padding:4px 8px;border-radius:6px;margin-bottom:5px}
+.qs-note.warn{background:var(--warn-soft);color:var(--warn)}
+.qs-note.ok{background:var(--teal-soft);color:var(--teal-ink)}
+.qs-line{border:1px solid var(--line);border-radius:8px;padding:7px 9px;margin-top:6px;background:var(--surface-2)}
+.qs-line-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px}
+.qs-raw{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.qs-pick{display:grid;grid-template-columns:1fr 62px;gap:6px;margin-bottom:4px}
+.qs-remember{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--ink-3);margin-top:3px}
+.qs-count{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--ink-2);
+  background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:4px 12px}
+.qs-count .n{font-family:var(--mono);font-size:15px;color:var(--teal)}
+.qs-chips{display:flex;flex-wrap:wrap;gap:6px}
+.segs{display:flex;gap:2px;background:var(--surface-2);border-radius:7px;padding:2px}
+.seg{font:inherit;font-size:11.5px;font-weight:600;border:0;background:none;color:var(--ink-2);
+  padding:4px 10px;border-radius:5px;cursor:pointer}
+.seg.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
+.qs-search{position:relative}
+.qs-results{max-height:230px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;
+  margin-top:6px;background:var(--surface)}
+.qs-result{display:flex;gap:10px;align-items:center;width:100%;text-align:left;font:inherit;font-size:12.5px;
+  color:var(--ink);background:none;border:0;border-bottom:1px solid var(--line);padding:7px 10px;cursor:pointer}
+.qs-result:last-child{border-bottom:0}
+.qs-result:hover{background:var(--rose-soft)}
+.qs-result .mono{margin-left:auto;font-size:11px;color:var(--ink-3)}
 .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2);font-weight:600}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
@@ -1066,17 +1100,19 @@ function kpi(k,v,d,cls){ return el("div",{class:"kpi "+(cls||"")},
 /* ================= VIEW: Ship Queue (supply home) ================= */
 function viewShip(){
   const wrap=el("div",{});
+  const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Ship queue"),
-      el("p",{},"Pick the rows that are ready, download the Unicommerce bulk file, upload it in UC, then paste the dispatch export back in. No re-typing.")),
+      el("p",{},"Everything marketing added is here. One click gives you the whole batch as a single Unicommerce file; paste the dispatch export back when it ships.")),
     el("div",{class:"head-actions"},
       el("button",{class:"btn",onclick:openPasteBack},"Paste dispatch details"),
-      el("button",{class:"btn btn-s",onclick:openBulkBuild},"Build UC bulk file"))));
+      el("button",{class:"btn",onclick:openBulkBuild},"Review first"),
+      el("button",{class:"btn btn-s",onclick:downloadAllReady},
+        "Download UC file"+(ready.length?" · "+ready.length+" order"+(ready.length>1?"s":""):"")))));
 
   const L=collabList().filter(matches).filter(c=>c.shipStatus!=="Cancelled")
     .sort((a,b)=>{const r=SHIP_FLOW.indexOf(a.shipStatus)-SHIP_FLOW.indexOf(b.shipStatus);
       return r||(a.requestedAt||"").localeCompare(b.requestedAt||"");});
-  const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
   const blocked=ready.filter(c=>collabProblems(c).length);
   const tats=collabList().map(shipTAT).filter(v=>v!==null&&v>=0);
 
@@ -2848,27 +2884,24 @@ async function rememberAlias(raw, code){
 </script>
 
 <script>
-/* ================= VIEW: New shipment (one page, start to file) ================= */
-const QS = {addrRaw:"", rec:null, prodRaw:"", lines:[], queue:[],
+/* ================= VIEW: New shipment ================= */
+/* Marketing fills these in all day. Supply downloads one file next morning
+   from the Ship Queue — there is deliberately no download button here. */
+const QS = {addrRaw:"", rec:null, mode:"paste", prodRaw:"", lines:[], pick:"",
   month:"", deliverable:"1 Reel", box:"PR Box", platform:"Instagram", price:0, barter:false, notes:""};
 
 function qsBlank(){
-  QS.addrRaw=""; QS.rec=null; QS.prodRaw=""; QS.lines=[]; QS.price=0; QS.barter=false; QS.notes="";
+  QS.addrRaw=""; QS.rec=null; QS.prodRaw=""; QS.lines=[]; QS.pick="";
+  QS.price=0; QS.barter=false; QS.notes="";
 }
-function qsParseAddress(){
-  QS.rec = QS.addrRaw.trim() ? parseAddressBatch(QS.addrRaw)[0] || null : null;
-}
+function qsParseAddress(){ QS.rec = QS.addrRaw.trim() ? parseAddressBatch(QS.addrRaw)[0]||null : null; }
 function qsParseProducts(){
   QS.lines = splitProductLines(QS.prodRaw).map(raw=>{
     const r = matchProductLine(raw);
-    /* "both" really means two products; "ambiguous" means one product we are
-       unsure about, so only the best guess goes in the box. */
-    const picks = r.status==="ambiguous"
-      ? (r.matches||[]).slice(0,1).map(m=>m.sku.code)
-      : (r.matches||[]).map(m=>m.sku.code);
+    const picks = r.status==="ambiguous" ? (r.matches||[]).slice(0,1).map(m=>m.sku.code)
+                                         : (r.matches||[]).map(m=>m.sku.code);
     return {raw, status:r.status, qty:r.qty||1, viaAlias:!!r.viaAlias, picks,
-            notes:(r.matches||[]).flatMap(m=>m.notes),
-            options:(r.ranked||r.matches||[]).map(m=>m.sku.code), remember:false};
+            notes:(r.matches||[]).flatMap(m=>m.notes), remember:false};
   });
 }
 const qsItems = ()=>{
@@ -2884,200 +2917,223 @@ function qsProblems(){
   if(!QS.rec) p.push("Paste the creator’s address");
   else addressProblems({name:QS.rec.name,phone:QS.rec.phone,addr1:QS.rec.addr1,
     city:QS.rec.city,state:QS.rec.state,pin:QS.rec.pin}).forEach(x=>p.push(x[1]));
-  if(!QS.lines.length) p.push("Paste the products to send");
+  if(!QS.lines.length) p.push("Add the products to send");
   QS.lines.forEach(l=>{ if(!l.picks.filter(Boolean).length) p.push("“"+l.raw+"” is not matched to a SKU"); });
   return p;
 }
+const waitingForSupply = ()=>collabList().filter(c=>c.shipStatus==="Ready to Ship");
 
 function viewQuick(){
   if(!QS.month) QS.month = nowMonth();
-  const wrap=el("div",{});
-  wrap.appendChild(el("div",{class:"view-head"},
+  const wrap=el("div",{class:"qs"});
+  const waiting=waitingForSupply();
+  wrap.appendChild(el("div",{class:"view-head",style:"margin-bottom:12px"},
     el("div",{},el("h1",{},"New shipment"),
-      el("p",{},"Paste the address, paste the products, download the Unicommerce file. One page, no hopping between tabs.")),
+      el("p",{},"Address, products, save. Supply downloads the whole day’s orders as one Unicommerce file.")),
     el("div",{class:"head-actions"},
-      QS.queue.length?el("button",{class:"btn",onclick:()=>{QS.queue=[];render();}},"Clear queue ("+QS.queue.length+")"):null)));
+      el("div",{class:"qs-count"},
+        el("span",{class:"n"},String(waiting.length)),
+        el("span",{},"waiting for supply"),
+        waiting.length?el("button",{class:"btn btn-q btn-sm",onclick:()=>go("ship")},"see queue"):null))));
 
   const grid=el("div",{class:"qs-grid"});
 
-  /* ---- 1. address ---- */
+  /* ---------- 1 · address ---------- */
   const addrOut=el("div",{});
   const drawAddr=()=>{
     addrOut.innerHTML="";
     const r=QS.rec;
-    if(!r){ addrOut.appendChild(el("div",{class:"hint"},"Nothing pasted yet.")); return; }
+    if(!r) return;
     const probs={}; addressProblems({name:r.name,phone:r.phone,addr1:r.addr1,city:r.city,state:r.state,pin:r.pin})
       .forEach(([k,m])=>{ if(!probs[k]) probs[k]=m; });
     const known=Object.values(S.influencers).find(i=>phone10(i.phone)&&phone10(i.phone)===phone10(r.phone));
-    if(known) addrOut.appendChild(el("div",{class:"callout",style:"margin-bottom:12px"},
-      el("b",{},"Repeat creator — "+known.name+". "),
-      collabList().filter(c=>c.influencerId===known.id).length+" earlier collabs. The master record will be updated with this address."));
-    if(r.flags.length) addrOut.appendChild(el("div",{class:"callout warn",style:"margin-bottom:12px"},
-      el("ul",{style:"margin:0 0 0 16px;padding:0"},...r.flags.map(f=>el("li",{},f)))));
-    const f=(label,key,node,opt)=>{ const w=field(label,node,opt||{});
+    if(known) addrOut.appendChild(el("div",{class:"qs-note ok"},
+      "Repeat creator — "+known.name+", "+collabList().filter(c=>c.influencerId===known.id).length+" earlier collabs"));
+    r.flags.forEach(f=>addrOut.appendChild(el("div",{class:"qs-note warn"},f)));
+    const f=(label,key,node,span)=>{ const w=el("label",{class:"f"+(span?" span2":"")},
+        el("span",{},label),node);
       if(probs[key]){ node.classList.add("bad"); w.appendChild(el("div",{class:"err"},probs[key])); } return w; };
-    addrOut.appendChild(el("div",{class:"grid2"},
-      f("Name","name",input(r.name,v=>{r.name=v;},{}),{req:true}),
-      f("Mobile","phone",input(r.phone,v=>{r.phone=v;},{inputmode:"numeric"}),{req:true}),
-      field("Email",input(r.email,v=>{r.email=v;},{type:"email"})),
-      f("Address line 1","addr1",input(r.addr1,v=>{r.addr1=v;}),{req:true,span:true}),
-      field("Address line 2 / landmark",input(r.addr2,v=>{r.addr2=v;}),{span:true}),
-      f("Pincode","pin",input(r.pin,v=>{r.pin=digits(v).slice(0,6);},{inputmode:"numeric",maxlength:"6"}),{req:true}),
-      f("City","city",input(r.city,v=>{r.city=v;}),{req:true}),
-      f("State","state",select(r.state,[["","Choose the state…"],...STATES],v=>{r.state=v;}),{req:true,span:true})));
+    addrOut.appendChild(el("div",{class:"qs-fields"},
+      f("Name","name",input(r.name,v=>{r.name=v;})),
+      f("Mobile","phone",input(r.phone,v=>{r.phone=v;},{inputmode:"numeric"})),
+      f("Pincode","pin",input(r.pin,v=>{r.pin=digits(v).slice(0,6);},{inputmode:"numeric",maxlength:"6"})),
+      f("Address line 1","addr1",input(r.addr1,v=>{r.addr1=v;}),true),
+      el("label",{class:"f span2"},el("span",{},"Line 2 / landmark"),input(r.addr2,v=>{r.addr2=v;})),
+      f("City","city",input(r.city,v=>{r.city=v;})),
+      f("State","state",select(r.state,[["","Choose…"],...STATES],v=>{r.state=v;}),true)));
   };
   const addrPane=el("div",{class:"panel"},
-    el("div",{class:"panel-h"},el("div",{},el("h3",{},"1 · Address"),
-      el("div",{class:"sub"},"Paste exactly what the creator sent"))),
+    el("div",{class:"panel-h"},el("h3",{},"1 · Address"),
+      el("span",{class:"sub",style:"margin-left:auto"},"paste what the creator sent")),
     el("div",{class:"panel-b"},
-      field("What the creator sent",el("textarea",{rows:5,
-        placeholder:"Name - Priya Sharma\nAddress - 12 MG Road, near Axis Bank\nPincode 560038\nPhone 9876543210",
-        oninput:e=>{QS.addrRaw=e.target.value;qsParseAddress();drawAddr();qsFoot();}},QS.addrRaw)),
-      el("div",{style:"height:12px"}), addrOut));
+      el("textarea",{rows:4,placeholder:"Name - Priya Sharma\nAddress - 12 MG Road, near Axis Bank\nPincode 560038\nPhone 9876543210",
+        oninput:e=>{QS.addrRaw=e.target.value;qsParseAddress();drawAddr();qsFoot();}},QS.addrRaw),
+      addrOut));
   drawAddr(); grid.appendChild(addrPane);
 
-  /* ---- 2. products ---- */
-  const prodOut=el("div",{});
+  /* ---------- 2 · products ---------- */
+  const prodOut=el("div",{}), pickWrap=el("div",{});
   const TONE={ok:"good",check:"warn",ambiguous:"warn",both:"info",none:"crit",empty:"neutral"};
-  const LABEL={ok:"matched",check:"check size",ambiguous:"confirm which",both:"two products",none:"no match",empty:"—"};
+  const LABEL={ok:"matched",check:"check size",ambiguous:"confirm",both:"two",none:"no match",empty:"—"};
+  const skuOpts=()=>[["","— choose —"],...Object.values(S.skus).filter(s=>s.active!==false)
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name))).map(s=>[s.code,s.name])];
+  const addPicked=code=>{
+    const s=Object.values(S.skus).find(x=>x.code===code); if(!s) return;
+    QS.lines.push({raw:s.name,status:"ok",qty:1,viaAlias:false,picks:[s.code],notes:[],remember:false});
+    QS.pick=""; drawPick(); drawProd(); qsFoot();
+  };
+  const drawPick=()=>{
+    pickWrap.innerHTML="";
+    const box=el("div",{class:"qs-search"});
+    const listEl=el("div",{class:"qs-results",hidden:true});
+    const q=el("input",{type:"search",placeholder:"Type to search products…",value:QS.pick,
+      oninput:e=>{QS.pick=e.target.value;fill();},
+      onfocus:()=>fill()});
+    const fill=()=>{
+      const term=QS.pick.trim().toLowerCase();
+      const all=Object.values(S.skus).filter(s=>s.active!==false);
+      const hits=(term
+        ? all.filter(s=>(s.name+" "+s.code).toLowerCase().includes(term))
+             .sort((a,b)=>String(a.name).localeCompare(String(b.name)))
+        : all.sort((a,b)=>String(a.name).localeCompare(String(b.name)))).slice(0,40);
+      listEl.innerHTML="";
+      if(!hits.length){ listEl.appendChild(el("div",{class:"qs-result",style:"color:var(--ink-3)"},"Nothing matches “"+QS.pick+"”")); }
+      hits.forEach(s=>listEl.appendChild(el("button",{class:"qs-result",onclick:()=>addPicked(s.code)},
+        el("span",{},s.name), el("span",{class:"mono"},s.code))));
+      listEl.hidden=false;
+    };
+    box.append(q,listEl); pickWrap.appendChild(box);
+    if(QS.pick) fill();
+  };
   const drawProd=()=>{
     prodOut.innerHTML="";
-    if(!QS.lines.length){ prodOut.appendChild(el("div",{class:"hint"},"Nothing pasted yet.")); return; }
-    const skuOpts=[["","— choose a SKU —"],...Object.values(S.skus)
-      .filter(s=>s.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)))
-      .map(s=>[s.code,s.name+"  ("+s.code+")"])];
     QS.lines.forEach((l,li)=>{
       const card=el("div",{class:"qs-line"});
       card.appendChild(el("div",{class:"qs-line-h"},
         el("span",{class:"qs-raw"},l.raw),
-        pill(LABEL[l.status]||l.status, TONE[l.status]||"neutral"),
-        l.viaAlias?el("span",{class:"tag"},"remembered"):null,
-        el("button",{class:"btn btn-q btn-sm",style:"margin-left:auto","aria-label":"Remove line",
+        l.status==="ok"&&!l.viaAlias?null:pill(LABEL[l.status]||l.status,TONE[l.status]||"neutral"),
+        el("button",{class:"btn btn-q btn-sm",style:"margin-left:auto","aria-label":"Remove",
           onclick:()=>{QS.lines.splice(li,1);drawProd();qsFoot();}},"✕")));
-      l.notes.forEach(n=>card.appendChild(el("div",{class:"hint",style:"color:var(--warn)"},n)));
-      const picks = l.picks.length?l.picks:[""];
-      picks.forEach((code,pi)=>{
+      l.notes.forEach(n=>card.appendChild(el("div",{class:"qs-note warn"},n)));
+      if(l.status==="ambiguous") card.appendChild(el("div",{class:"qs-note warn"},"More than one SKU fits — confirm which"));
+      (l.picks.length?l.picks:[""]).forEach((code,pi)=>{
         card.appendChild(el("div",{class:"qs-pick"},
-          select(code, skuOpts, v=>{
-            l.picks[pi]=v;
-            if(v && (l.status==="none"||l.status==="ambiguous")) l.remember=true;
-            l.status = l.picks.filter(Boolean).length ? (l.picks.length>1?"both":"ok") : "none";
-            drawProd(); qsFoot();
-          },{"aria-label":"SKU for "+l.raw}),
-          input(l.qty,v=>{l.qty=Math.max(1,num(v));qsFoot();},{type:"number",min:"1","aria-label":"Quantity"})));
+          select(code,skuOpts(),v=>{ l.picks[pi]=v;
+            if(v&&(l.status==="none"||l.status==="ambiguous")) l.remember=true;
+            l.status=l.picks.filter(Boolean).length?(l.picks.length>1?"both":"ok"):"none";
+            drawProd(); qsFoot(); },{"aria-label":"SKU"}),
+          input(l.qty,v=>{l.qty=Math.max(1,num(v));qsFoot();},{type:"number",min:"1","aria-label":"Qty"})));
       });
-      if(l.status==="both") card.appendChild(el("div",{class:"hint"},"Two products, because the line says “both”."));
-      if(l.status==="ambiguous") card.appendChild(el("div",{class:"hint",style:"color:var(--warn)"},
-        "More than one SKU fits. The closest is filled in — change it if that is not the one."));
-      if((l.status==="ok"||l.status==="both") && !l.viaAlias && l.picks.filter(Boolean).length===1)
+      if((l.status==="ok"||l.status==="both")&&!l.viaAlias&&l.picks.filter(Boolean).length===1&&l.raw!==(Object.values(S.skus).find(x=>x.code===l.picks[0])||{}).name)
         card.appendChild(el("label",{class:"qs-remember"},
           el("input",{type:"checkbox",style:"width:auto",checked:l.remember?true:null,
             onchange:e=>{l.remember=e.target.checked;}}),
-          el("span",{},"Remember “"+l.raw+"” means this SKU")));
+          el("span",{},"Remember this wording")));
       prodOut.appendChild(card);
     });
   };
+  const modeBtn=(id,label)=>el("button",{class:"seg"+(QS.mode===id?" on":""),
+    onclick:()=>{QS.mode=id;render();}},label);
+  const pasteBox=el("textarea",{rows:4,placeholder:"Rosemary hair oil 200 ml\nSBL 200 ml\nLip balm old both",
+    oninput:e=>{QS.prodRaw=e.target.value;qsParseProducts();drawProd();qsFoot();}},QS.prodRaw);
   const prodPane=el("div",{class:"panel"},
-    el("div",{class:"panel-h"},el("div",{},el("h3",{},"2 · Products"),
-      el("div",{class:"sub"},"One per line, in your own words"))),
+    el("div",{class:"panel-h"},el("h3",{},"2 · Products"),
+      el("div",{class:"segs",style:"margin-left:auto"},modeBtn("paste","Paste list"),modeBtn("search","Search & pick"))),
     el("div",{class:"panel-b"},
-      field("What goes in the box",el("textarea",{rows:5,
-        placeholder:"Rosemary hair oil 200 ml\nSBL 200 ml\nLip balm old both\nHair growth serum roll on",
-        oninput:e=>{QS.prodRaw=e.target.value;qsParseProducts();drawProd();qsFoot();}},QS.prodRaw),
-        {hint:"“2 bottle” sets quantity. “both” picks two. “A & B” on one line splits into two."}),
-      el("div",{style:"height:12px"}), prodOut));
+      QS.mode==="paste" ? pasteBox : pickWrap,
+      QS.mode==="paste" ? el("div",{class:"hint"},"“2 bottle” sets quantity · “both” picks two · “A & B” splits") : null,
+      prodOut));
+  if(QS.mode==="search") drawPick();
   drawProd(); grid.appendChild(prodPane);
   wrap.appendChild(grid);
 
-  /* ---- 3. details ---- */
-  wrap.appendChild(el("div",{class:"panel",style:"margin-top:16px"},
-    el("div",{class:"panel-h"},el("div",{},el("h3",{},"3 · The collab"),
-      el("div",{class:"sub"},"Fee is optional — leave it for later if it is not agreed yet"))),
-    el("div",{class:"panel-b"},el("div",{class:"grid2"},
-      field("Campaign month",input(QS.month,v=>{QS.month=v;},{type:"month"})),
-      field("Deliverable",select(QS.deliverable,DELIVERABLES,v=>{QS.deliverable=v;})),
-      field("Platform",select(QS.platform,PLATFORMS,v=>{QS.platform=v;})),
-      field("Box type",select(QS.box,BOXES,v=>{QS.box=v;})),
-      field("Locked fee (₹)",input(QS.price,v=>{QS.price=num(v);},{type:"number",min:"0",disabled:QS.barter?true:null})),
+  /* ---------- 3 · the collab ---------- */
+  wrap.appendChild(el("div",{class:"panel",style:"margin-top:12px"},
+    el("div",{class:"panel-h"},el("h3",{},"3 · Collab"),
+      el("span",{class:"sub",style:"margin-left:auto"},"fee optional")),
+    el("div",{class:"panel-b"},el("div",{class:"qs-meta"},
+      el("label",{class:"f"},el("span",{},"Month"),input(QS.month,v=>{QS.month=v;},{type:"month"})),
+      el("label",{class:"f"},el("span",{},"Deliverable"),select(QS.deliverable,DELIVERABLES,v=>{QS.deliverable=v;})),
+      el("label",{class:"f"},el("span",{},"Platform"),select(QS.platform,PLATFORMS,v=>{QS.platform=v;})),
+      el("label",{class:"f"},el("span",{},"Box"),select(QS.box,BOXES,v=>{QS.box=v;})),
+      el("label",{class:"f"},el("span",{},"Fee ₹"),input(QS.price,v=>{QS.price=num(v);},
+        {type:"number",min:"0",disabled:QS.barter?true:null})),
       el("label",{class:"f"},el("span",{},"Barter"),
-        el("div",{style:"display:flex;align-items:center;gap:8px;padding-top:7px"},
-          el("input",{type:"checkbox",style:"width:auto",checked:QS.barter?true:null,
-            onchange:e=>{QS.barter=e.target.checked; if(QS.barter) QS.price=0; render();}}),
-          el("span",{style:"font-size:13px"},"Product only"))),
-      field("Note for packing",input(QS.notes,v=>{QS.notes=v;},{placeholder:"Handwritten note, shade…"}),{span:true})))));
+        el("div",{style:"padding-top:6px"},el("input",{type:"checkbox",style:"width:auto",
+          checked:QS.barter?true:null,onchange:e=>{QS.barter=e.target.checked;if(QS.barter)QS.price=0;render();}}))),
+      el("label",{class:"f span2"},el("span",{},"Packing note"),
+        input(QS.notes,v=>{QS.notes=v;},{placeholder:"Handwritten note, shade…"}))))));
 
-  /* ---- queue ---- */
-  if(QS.queue.length){
-    const tb=el("tbody",{});
-    QS.queue.forEach(id=>{ const c=S.collabs[id]; if(!c) return;
-      tb.appendChild(el("tr",{},
-        el("td",{},(c.ship||{}).name),
-        el("td",{class:"mono"},[(c.ship||{}).city,(c.ship||{}).state].filter(Boolean).join(", ")),
-        el("td",{class:"mono"},(c.items||[]).map(i=>i.sku+"×"+i.qty).join(", ")),
-        el("td",{},el("span",{class:"tag "+(c.box==="PR Box"?"pr":"")},c.box))));
-    });
-    wrap.appendChild(el("div",{style:"margin-top:16px"},el("div",{class:"panel"},
-      el("div",{class:"panel-h"},el("div",{},el("h3",{},"Ready in this batch"),
-        el("div",{class:"sub"},QS.queue.length+" shipment"+(QS.queue.length>1?"s":"")+" saved — download them as one UC file"))),
-      el("div",{class:"tw"},el("table",{},tb)))));
-  }
+  /* ---------- today's additions ---------- */
+  const today=collabList().filter(c=>c.requestedAt===todayISO()&&c.shipStatus==="Ready to Ship")
+    .sort((a,b)=>String(b.updatedAt||"").localeCompare(String(a.updatedAt||"")));
+  if(today.length) wrap.appendChild(el("div",{class:"panel",style:"margin-top:12px"},
+    el("div",{class:"panel-h"},el("h3",{},"Added today"),
+      el("span",{class:"sub",style:"margin-left:auto"},today.length+" going out in tomorrow’s file")),
+    el("div",{class:"panel-b"},el("div",{class:"qs-chips"},
+      ...today.map(c=>el("button",{class:"pchip",onclick:()=>openCollab(c.id)},
+        el("span",{},(c.ship||{}).name),
+        el("span",{class:"n"},String((c.items||[]).length))))))));
 
-  /* ---- action bar ---- */
-  const foot=el("div",{class:"selbar",style:"max-width:1000px"});
+  const foot=el("div",{class:"selbar",style:"max-width:920px"});
   wrap.appendChild(foot);
   function qsFoot(){
     foot.innerHTML="";
     const probs=qsProblems(), items=qsItems();
     foot.appendChild(el("span",{class:"n"},String(items.length)));
-    foot.appendChild(el("span",{},"product"+(items.length===1?"":"s")+" ready"));
-    if(probs.length) foot.appendChild(el("span",{style:"font-size:12.5px;opacity:.85"},"· "+probs[0]+(probs.length>1?" (+"+(probs.length-1)+" more)":"")));
+    foot.appendChild(el("span",{},"product"+(items.length===1?"":"s")));
+    if(probs.length) foot.appendChild(el("span",{style:"font-size:12.5px;opacity:.85"},
+      "· "+probs[0]+(probs.length>1?" (+"+(probs.length-1)+")":"")));
     foot.appendChild(el("span",{style:"flex:1"}));
-    foot.appendChild(el("button",{class:"btn btn-sm",disabled:probs.length?true:null,
-      onclick:()=>qsSave(false)},"Save & add another"));
-    foot.appendChild(el("button",{class:"btn btn-sm btn-s",disabled:(probs.length&&!QS.queue.length)?true:null,
-      onclick:()=>qsSave(true)}, QS.queue.length&&probs.length ? "Download UC file ("+QS.queue.length+")" : "Save & download UC file"));
+    foot.appendChild(el("button",{class:"btn btn-sm btn-s",disabled:probs.length?true:null,
+      onclick:qsSave},"Save shipment"));
   }
   qsFoot();
   return wrap;
 }
 
-async function qsSave(download){
+async function qsSave(){
   const probs=qsProblems();
-  if(probs.length && !(download && QS.queue.length)){ toast(probs[0],true); return; }
-  if(!probs.length){
-    const r=QS.rec, ph=phone10(r.phone);
-    let inf=Object.values(S.influencers).find(i=>ph.length===10&&phone10(i.phone)===ph);
-    const body={name:titleCase(r.name),phone:ph,email:r.email||"",addr1:r.addr1,addr2:r.addr2,
-      city:titleCase(r.city),state:r.state,pin:digits(r.pin),platform:QS.platform};
-    if(inf) await Store.put("influencers",{...inf,...body});
-    else { inf={id:uid("inf"),handle:"",tier:TIERS[1],category:CATEGORIES[0],notes:"",createdAt:todayISO(),...body};
-           await Store.put("influencers",inf); }
-    for(const l of QS.lines) if(l.remember && l.picks.filter(Boolean).length===1)
-      await rememberAlias(l.raw, l.picks[0]);
-    const c={...blankCollab(), influencerId:inf.id, month:QS.month, platform:QS.platform,
-      deliverable:QS.deliverable, box:QS.box, items:qsItems(), notes:QS.notes,
-      price:QS.barter?0:num(QS.price), barter:QS.barter,
-      payStatus:QS.barter?"Not Applicable (Barter)":"Not Due",
-      ship:{name:titleCase(r.name),phone:ph,email:r.email||"",addr1:r.addr1,addr2:r.addr2,
-            city:titleCase(r.city),state:r.state,pin:digits(r.pin)},
-      shipStatus:"Ready to Ship", requestedAt:todayISO()};
-    const id=await Store.put("collabs",c);
-    QS.queue.push(id);
-    qsBlank();
-    toast(download?"Saved":"Saved — next one");
-  }
-  if(download){
-    UI.sel=new Set(QS.queue);
-    const ids=[...QS.queue];
-    render();
-    openBulkBuild();
-    QS.queue=ids;
-  } else render();
+  if(probs.length){ toast(probs[0],true); return; }
+  const r=QS.rec, ph=phone10(r.phone);
+  let inf=Object.values(S.influencers).find(i=>ph.length===10&&phone10(i.phone)===ph);
+  const body={name:titleCase(r.name),phone:ph,email:r.email||"",addr1:r.addr1,addr2:r.addr2,
+    city:titleCase(r.city),state:r.state,pin:digits(r.pin),platform:QS.platform};
+  if(inf) await Store.put("influencers",{...inf,...body});
+  else { inf={id:uid("inf"),handle:"",tier:TIERS[1],category:CATEGORIES[0],notes:"",createdAt:todayISO(),...body};
+         await Store.put("influencers",inf); }
+  for(const l of QS.lines) if(l.remember && l.picks.filter(Boolean).length===1)
+    await rememberAlias(l.raw, l.picks[0]);
+  await Store.put("collabs",{...blankCollab(), influencerId:inf.id, month:QS.month, platform:QS.platform,
+    deliverable:QS.deliverable, box:QS.box, items:qsItems(), notes:QS.notes,
+    price:QS.barter?0:num(QS.price), barter:QS.barter,
+    payStatus:QS.barter?"Not Applicable (Barter)":"Not Due",
+    ship:{name:titleCase(r.name),phone:ph,email:r.email||"",addr1:r.addr1,addr2:r.addr2,
+          city:titleCase(r.city),state:r.state,pin:digits(r.pin)},
+    shipStatus:"Ready to Ship", requestedAt:todayISO()});
+  qsBlank();
+  toast("Saved — supply will pick it up");
+  render();
 }
 </script>
 
 <script>
 /* ================= bulk build + paste back ================= */
+/* Supply's morning job: every ready order, one file, one click. */
+async function downloadAllReady(){
+  const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
+  const clean=ready.filter(c=>!collabProblems(c).length);
+  if(!String(S.settings.shipMethod||"").trim() || !clean.length || clean.length!==ready.length){
+    openBulkBuild(); return;   // something needs a look — show the review panel instead
+  }
+  const {csv,assigned}=buildUCFile(clean);
+  const ok=await saveFile("uc-bulk-orders-"+todayISO()+".csv",csv);
+  if(!ok) return;
+  for(const {collab:c,code} of assigned)
+    await Store.put("collabs",{...S.collabs[c.id],ucCode:code,shipStatus:"Order Created"});
+  UI.sel.clear();
+  toast(clean.length+" orders downloaded and marked as created in UC");
+}
 function openBulkBuild(){
   const chosen = UI.sel.size
     ? [...UI.sel].map(id=>S.collabs[id]).filter(Boolean)

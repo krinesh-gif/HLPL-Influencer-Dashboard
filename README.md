@@ -19,11 +19,13 @@ retypes an address, a SKU or a tracking number.
 
 ## Screens
 
-- **New shipment** — the whole job on one page. Paste the address, paste the products in
-  your team's own words, download the Unicommerce file. Save several before downloading
-  and they come out as one file.
+- **New shipment** — marketing's page. Paste the address, add the products either by
+  pasting a list or searching the catalogue, save. There is no download here on purpose:
+  entries pile up through the day and supply takes them as one file the next morning.
+- **Ship queue** — supply's page. **Download UC file · N orders** builds every ready
+  order into one sheet, saves it, and marks them created in UC, in a single click.
+  *Review first* opens the same batch for checking before it downloads.
 - **Collabs** — the register. Locked price, payment state, box contents, shipment stage.
-- **Ship queue** — supply's working view. Select ready rows → **Build UC bulk file** → upload in Unicommerce → **Paste dispatch details** to close the loop.
 - **Content** — post date, link, views, reach, likes, comments, shares, saves; ER, CPV and CPE computed.
 - **Influencers** — the master. Address, pincode, mobile, tier, category, full collab history, one-click repeat.
 - **Products** — the SKU master, pasted straight from the UC item master, so a bulk upload can never fail on a typed SKU.
