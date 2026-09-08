@@ -19,6 +19,9 @@ retypes an address, a SKU or a tracking number.
 
 ## Screens
 
+- **New shipment** — the whole job on one page. Paste the address, paste the products in
+  your team's own words, download the Unicommerce file. Save several before downloading
+  and they come out as one file.
 - **Collabs** — the register. Locked price, payment state, box contents, shipment stage.
 - **Ship queue** — supply's working view. Select ready rows → **Build UC bulk file** → upload in Unicommerce → **Paste dispatch details** to close the loop.
 - **Content** — post date, link, views, reach, likes, comments, shares, saves; ER, CPV and CPE computed.
@@ -45,8 +48,9 @@ The five mandatory columns are always filled:
 
 Other rules the generator follows:
 
-- **One row per item.** An order with two SKUs writes two rows sharing the same
-  Sales Order Code and carrying different Sale Order Item Codes.
+- **One row per item.** Five products in one order write five rows. Every column is
+  identical across them except `Item SKU Code*` (AJ), `Item Name` (AL) and
+  `Sale Order Item Code*` (AH), which UC requires to be unique per line.
 - **Gifting treatment** (Setup): Selling Price = MRP and Discount = MRP, so the box
   carries its real value on the invoice while Prepaid Amount comes out ₹0. Switch to
   *Charge MRP* if you ever bill a shipment.

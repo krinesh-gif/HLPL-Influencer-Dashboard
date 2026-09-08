@@ -166,6 +166,13 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .kpi.supply .v{color:var(--teal)}
 
 /* ---------- charts ---------- */
+.qs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media (max-width:900px){.qs-grid{grid-template-columns:1fr}}
+.qs-line{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--surface-2)}
+.qs-line-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.qs-raw{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+.qs-pick{display:grid;grid-template-columns:1fr 74px;gap:8px;margin-bottom:6px}
+.qs-remember{display:flex;gap:7px;align-items:center;font-size:11.5px;color:var(--ink-3);margin-top:4px}
 .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2);font-weight:600}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
@@ -786,8 +793,9 @@ function briefText(c){
 </script>
 <script>
 /* ================= UI state + router ================= */
-const UI = { tab:"collabs", q:"", month:"", status:"", pay:"", sel:new Set(), anMonth:"" };
+const UI = { tab:"quick", q:"", month:"", status:"", pay:"", sel:new Set(), anMonth:"" };
 const TABS = [
+  {id:"quick",    label:"New shipment",lane:"lane-s"},
   {id:"collabs",  label:"Collabs",     lane:"lane-m"},
   {id:"ship",     label:"Ship Queue",  lane:"lane-s"},
   {id:"content",  label:"Content",     lane:"lane-m"},
@@ -809,7 +817,7 @@ function render(){
   renderTabs(); renderRibbon();
   v.innerHTML="";
   if(Store.mode==="local") v.appendChild(localBanner());
-  const fn={collabs:viewCollabs,ship:viewShip,content:viewContent,people:viewPeople,
+  const fn={quick:viewQuick,collabs:viewCollabs,ship:viewShip,content:viewContent,people:viewPeople,
             screening:viewScreening,products:viewProducts,analytics:viewAnalytics,
             setup:viewSetup}[UI.tab]||viewCollabs;
   v.appendChild(fn());
@@ -2715,6 +2723,345 @@ function openScreen(infId){
     out.innerHTML=""; out.appendChild(box);
   }
   build();
+}
+</script>
+
+<script>
+/* ================= product line matcher =================
+   Marketing writes products the way they speak. This maps that free text
+   onto real SKU codes, says how sure it is, and never guesses silently.
+   Choices the team confirms are remembered as aliases. */
+const PRODUCT_SYNONYMS = {
+  sbl:"sunscreen body lotion", uar:"under arm roll", hgs:"hair growth serum",
+  bw:"body wash", eo:"essential oil", ho:"hair oil", rl:"rosemary lavender",
+  bodywash:"body wash", facewash:"face wash", rollon:"roll on",
+  moisturiser:"moisturizer", moist:"moisturizer", spf:"sunscreen",
+  sunscren:"sunscreen", suncreen:"sunscreen", rosmary:"rosemary", rosemery:"rosemary",
+  shmp:"shampoo", shampo:"shampoo", lipbalm:"lip balm", lb:"lip balm",
+  bt:"beetroot", cc:"cocoa", br:"barrier repair", hbr:"barrier repair",
+  nontinted:"non tinted", combo:"kit",
+  bottle:"", bottles:"", pc:"", pcs:"", piece:"", pieces:"", nos:"", no:"",
+  qty:"", each:"", pack:"", packs:""
+};
+const PROD_STOP = new Set(["aravi","organic","the","and","of","a","an","with","for","x"]);
+const PROD_UNITS = new Set(["ml","mls","gm","gms","g","gram","grams","l","ltr"]);
+const pWords = s => String(s||"").toLowerCase()
+  .replace(/[^a-z0-9%&+.\s-]/g," ")
+  .replace(/(\d)\s*(ml|gm|gms|g|ltr|l)\b/g,"$1 $2")
+  .split(/[\s\-]+/).filter(Boolean);
+function pExpand(words){
+  const out=[];
+  for(const w of words){
+    if(PROD_STOP.has(w)) continue;
+    const syn=PRODUCT_SYNONYMS[w];
+    if(syn===undefined) out.push(w); else if(syn) out.push(...syn.split(" "));
+  }
+  return out;
+}
+function pSize(words){
+  for(let i=0;i<words.length;i++){
+    if(PROD_UNITS.has(words[i]) && /^\d+$/.test(words[i-1]||""))
+      return {n:+words[i-1],u:words[i]==="gms"?"gm":words[i]};
+    const m=/^(\d+)(ml|gm|gms|g)$/.exec(words[i]);
+    if(m) return {n:+m[1],u:m[2]==="gms"?"gm":m[2]};
+  }
+  const bare=words.filter(w=>/^\d{2,4}$/.test(w)).map(Number).filter(n=>n>=5&&n<=1000);
+  return bare.length?{n:bare[bare.length-1],u:""}:null;
+}
+function pQty(raw){
+  const m=/\bx\s*(\d{1,2})\b/i.exec(raw)||/\b(\d{1,2})\s*(?:bottle|bottles|pc|pcs|piece|pieces|nos|units?)\b/i.exec(raw);
+  return m?Math.max(1,+m[1]):1;
+}
+const pGrams = ws => ws.slice(0,-1).map((w,i)=>w+" "+ws[i+1]);
+const aliasKey = raw => pExpand(pWords(raw)).join(" ");
+function pIndex(skus){
+  const docs=skus.map(s=>{ const ws=pExpand(pWords(s.name||s.code));
+    return {sku:s, words:ws, grams:new Set(pGrams(ws)), size:pSize(pWords(s.name||s.code))}; });
+  const df={},gdf={};
+  docs.forEach(d=>{ new Set(d.words).forEach(w=>{df[w]=(df[w]||0)+1;});
+                    d.grams.forEach(g=>{gdf[g]=(gdf[g]||0)+1;}); });
+  const N=Math.max(1,docs.length);
+  return {docs, idf:w=>Math.log(1+N/((df[w]||0)+0.5)), gidf:g=>(gdf[g]?Math.log(1+N/gdf[g]):0)};
+}
+function pScore(qWords,qSize,qRaw,doc,idf,gidf){
+  const dSet=new Set(doc.words); let hit=0,total=0;
+  for(const w of new Set(qWords)){ const wt=idf(w); total+=wt;
+    if(dSet.has(w)) hit+=wt;
+    else if([...dSet].some(d=>d.startsWith(w)||w.startsWith(d))) hit+=wt*0.6; }
+  let score=total?hit/total:0, dHit=0,dTotal=0;
+  for(const w of dSet){ const wt=idf(w); dTotal+=wt; if(qWords.includes(w)) dHit+=wt; }
+  score=0.75*score+0.25*(dTotal?dHit/dTotal:0);
+  for(const g of pGrams(qWords)) if(doc.grams.has(g)) score+=Math.min(0.30,0.11*gidf(g));
+  const notes=[], nx=/\bnx\b/i.test(qRaw), old=/\bold\b/i.test(qRaw), isNx=/^nx\//i.test(doc.sku.code||"");
+  if(nx) score += isNx? 0.30 : -0.30;
+  if(old) score += isNx? -0.25 : 0.12;
+  if(qSize && doc.size){
+    if(qSize.n===doc.size.n) score+=0.22;
+    else { score-=0.10; notes.push("size differs — you wrote "+qSize.n+(qSize.u||"")+", the SKU is "+doc.size.n+doc.size.u); }
+  }
+  return {score,notes};
+}
+function matchProductLine(raw, skus){
+  const list=(skus||Object.values(S.skus)).filter(s=>s.active!==false);
+  const qty=pQty(raw), both=/\bboth\b/i.test(raw);
+  const words=pWords(raw), qWords=pExpand(words), qSize=pSize(words);
+  if(!qWords.length) return {raw,qty:1,matches:[],status:"empty"};
+
+  const alias=(S.settings.productAliases||{})[aliasKey(raw)];
+  if(alias){
+    const hit=list.find(s=>s.code===alias);
+    if(hit) return {raw,qty,matches:[{sku:hit,score:9,notes:[]}],status:"ok",viaAlias:true};
+  }
+  const ix=pIndex(list);
+  const ranked=ix.docs.map(d=>{ const {score,notes}=pScore(qWords,qSize,raw,d,ix.idf,ix.gidf);
+    return {sku:d.sku,score,notes}; }).sort((a,b)=>b.score-a.score);
+  const best=ranked[0], second=ranked[1];
+  if(!best||best.score<0.34) return {raw,qty,matches:[],status:"none",ranked:ranked.slice(0,5)};
+  if(both&&second&&second.score>=best.score-0.25) return {raw,qty:1,matches:[best,second],status:"both"};
+  if(second&&best.score-second.score<0.12) return {raw,qty,matches:[best,second],status:"ambiguous",ranked:ranked.slice(0,5)};
+  return {raw,qty,matches:[best],status:best.notes.length?"check":"ok",ranked:ranked.slice(0,5)};
+}
+function splitProductLines(text){
+  const out=[];
+  String(text||"").split(/\r?\n/).forEach(line=>{
+    const l=line.trim(); if(!l) return;
+    l.split(/\s+&\s+|\s+\+\s+|\s+and\s+/i).map(x=>x.trim()).filter(Boolean).forEach(x=>out.push(x));
+  });
+  return out;
+}
+async function rememberAlias(raw, code){
+  const key=aliasKey(raw); if(!key||!code) return;
+  S.settings.productAliases = {...(S.settings.productAliases||{}), [key]:code};
+  await Store.saveSettings();
+}
+</script>
+
+<script>
+/* ================= VIEW: New shipment (one page, start to file) ================= */
+const QS = {addrRaw:"", rec:null, prodRaw:"", lines:[], queue:[],
+  month:"", deliverable:"1 Reel", box:"PR Box", platform:"Instagram", price:0, barter:false, notes:""};
+
+function qsBlank(){
+  QS.addrRaw=""; QS.rec=null; QS.prodRaw=""; QS.lines=[]; QS.price=0; QS.barter=false; QS.notes="";
+}
+function qsParseAddress(){
+  QS.rec = QS.addrRaw.trim() ? parseAddressBatch(QS.addrRaw)[0] || null : null;
+}
+function qsParseProducts(){
+  QS.lines = splitProductLines(QS.prodRaw).map(raw=>{
+    const r = matchProductLine(raw);
+    /* "both" really means two products; "ambiguous" means one product we are
+       unsure about, so only the best guess goes in the box. */
+    const picks = r.status==="ambiguous"
+      ? (r.matches||[]).slice(0,1).map(m=>m.sku.code)
+      : (r.matches||[]).map(m=>m.sku.code);
+    return {raw, status:r.status, qty:r.qty||1, viaAlias:!!r.viaAlias, picks,
+            notes:(r.matches||[]).flatMap(m=>m.notes),
+            options:(r.ranked||r.matches||[]).map(m=>m.sku.code), remember:false};
+  });
+}
+const qsItems = ()=>{
+  const out=[];
+  QS.lines.forEach(l=>l.picks.filter(Boolean).forEach(code=>{
+    const s=Object.values(S.skus).find(x=>x.code===code);
+    if(s) out.push({sku:s.code,name:s.name,qty:num(l.qty)||1,mrp:num(s.mrp)});
+  }));
+  return out;
+};
+function qsProblems(){
+  const p=[];
+  if(!QS.rec) p.push("Paste the creator’s address");
+  else addressProblems({name:QS.rec.name,phone:QS.rec.phone,addr1:QS.rec.addr1,
+    city:QS.rec.city,state:QS.rec.state,pin:QS.rec.pin}).forEach(x=>p.push(x[1]));
+  if(!QS.lines.length) p.push("Paste the products to send");
+  QS.lines.forEach(l=>{ if(!l.picks.filter(Boolean).length) p.push("“"+l.raw+"” is not matched to a SKU"); });
+  return p;
+}
+
+function viewQuick(){
+  if(!QS.month) QS.month = nowMonth();
+  const wrap=el("div",{});
+  wrap.appendChild(el("div",{class:"view-head"},
+    el("div",{},el("h1",{},"New shipment"),
+      el("p",{},"Paste the address, paste the products, download the Unicommerce file. One page, no hopping between tabs.")),
+    el("div",{class:"head-actions"},
+      QS.queue.length?el("button",{class:"btn",onclick:()=>{QS.queue=[];render();}},"Clear queue ("+QS.queue.length+")"):null)));
+
+  const grid=el("div",{class:"qs-grid"});
+
+  /* ---- 1. address ---- */
+  const addrOut=el("div",{});
+  const drawAddr=()=>{
+    addrOut.innerHTML="";
+    const r=QS.rec;
+    if(!r){ addrOut.appendChild(el("div",{class:"hint"},"Nothing pasted yet.")); return; }
+    const probs={}; addressProblems({name:r.name,phone:r.phone,addr1:r.addr1,city:r.city,state:r.state,pin:r.pin})
+      .forEach(([k,m])=>{ if(!probs[k]) probs[k]=m; });
+    const known=Object.values(S.influencers).find(i=>phone10(i.phone)&&phone10(i.phone)===phone10(r.phone));
+    if(known) addrOut.appendChild(el("div",{class:"callout",style:"margin-bottom:12px"},
+      el("b",{},"Repeat creator — "+known.name+". "),
+      collabList().filter(c=>c.influencerId===known.id).length+" earlier collabs. The master record will be updated with this address."));
+    if(r.flags.length) addrOut.appendChild(el("div",{class:"callout warn",style:"margin-bottom:12px"},
+      el("ul",{style:"margin:0 0 0 16px;padding:0"},...r.flags.map(f=>el("li",{},f)))));
+    const f=(label,key,node,opt)=>{ const w=field(label,node,opt||{});
+      if(probs[key]){ node.classList.add("bad"); w.appendChild(el("div",{class:"err"},probs[key])); } return w; };
+    addrOut.appendChild(el("div",{class:"grid2"},
+      f("Name","name",input(r.name,v=>{r.name=v;},{}),{req:true}),
+      f("Mobile","phone",input(r.phone,v=>{r.phone=v;},{inputmode:"numeric"}),{req:true}),
+      field("Email",input(r.email,v=>{r.email=v;},{type:"email"})),
+      f("Address line 1","addr1",input(r.addr1,v=>{r.addr1=v;}),{req:true,span:true}),
+      field("Address line 2 / landmark",input(r.addr2,v=>{r.addr2=v;}),{span:true}),
+      f("Pincode","pin",input(r.pin,v=>{r.pin=digits(v).slice(0,6);},{inputmode:"numeric",maxlength:"6"}),{req:true}),
+      f("City","city",input(r.city,v=>{r.city=v;}),{req:true}),
+      f("State","state",select(r.state,[["","Choose the state…"],...STATES],v=>{r.state=v;}),{req:true,span:true})));
+  };
+  const addrPane=el("div",{class:"panel"},
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},"1 · Address"),
+      el("div",{class:"sub"},"Paste exactly what the creator sent"))),
+    el("div",{class:"panel-b"},
+      field("What the creator sent",el("textarea",{rows:5,
+        placeholder:"Name - Priya Sharma\nAddress - 12 MG Road, near Axis Bank\nPincode 560038\nPhone 9876543210",
+        oninput:e=>{QS.addrRaw=e.target.value;qsParseAddress();drawAddr();qsFoot();}},QS.addrRaw)),
+      el("div",{style:"height:12px"}), addrOut));
+  drawAddr(); grid.appendChild(addrPane);
+
+  /* ---- 2. products ---- */
+  const prodOut=el("div",{});
+  const TONE={ok:"good",check:"warn",ambiguous:"warn",both:"info",none:"crit",empty:"neutral"};
+  const LABEL={ok:"matched",check:"check size",ambiguous:"confirm which",both:"two products",none:"no match",empty:"—"};
+  const drawProd=()=>{
+    prodOut.innerHTML="";
+    if(!QS.lines.length){ prodOut.appendChild(el("div",{class:"hint"},"Nothing pasted yet.")); return; }
+    const skuOpts=[["","— choose a SKU —"],...Object.values(S.skus)
+      .filter(s=>s.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)))
+      .map(s=>[s.code,s.name+"  ("+s.code+")"])];
+    QS.lines.forEach((l,li)=>{
+      const card=el("div",{class:"qs-line"});
+      card.appendChild(el("div",{class:"qs-line-h"},
+        el("span",{class:"qs-raw"},l.raw),
+        pill(LABEL[l.status]||l.status, TONE[l.status]||"neutral"),
+        l.viaAlias?el("span",{class:"tag"},"remembered"):null,
+        el("button",{class:"btn btn-q btn-sm",style:"margin-left:auto","aria-label":"Remove line",
+          onclick:()=>{QS.lines.splice(li,1);drawProd();qsFoot();}},"✕")));
+      l.notes.forEach(n=>card.appendChild(el("div",{class:"hint",style:"color:var(--warn)"},n)));
+      const picks = l.picks.length?l.picks:[""];
+      picks.forEach((code,pi)=>{
+        card.appendChild(el("div",{class:"qs-pick"},
+          select(code, skuOpts, v=>{
+            l.picks[pi]=v;
+            if(v && (l.status==="none"||l.status==="ambiguous")) l.remember=true;
+            l.status = l.picks.filter(Boolean).length ? (l.picks.length>1?"both":"ok") : "none";
+            drawProd(); qsFoot();
+          },{"aria-label":"SKU for "+l.raw}),
+          input(l.qty,v=>{l.qty=Math.max(1,num(v));qsFoot();},{type:"number",min:"1","aria-label":"Quantity"})));
+      });
+      if(l.status==="both") card.appendChild(el("div",{class:"hint"},"Two products, because the line says “both”."));
+      if(l.status==="ambiguous") card.appendChild(el("div",{class:"hint",style:"color:var(--warn)"},
+        "More than one SKU fits. The closest is filled in — change it if that is not the one."));
+      if((l.status==="ok"||l.status==="both") && !l.viaAlias && l.picks.filter(Boolean).length===1)
+        card.appendChild(el("label",{class:"qs-remember"},
+          el("input",{type:"checkbox",style:"width:auto",checked:l.remember?true:null,
+            onchange:e=>{l.remember=e.target.checked;}}),
+          el("span",{},"Remember “"+l.raw+"” means this SKU")));
+      prodOut.appendChild(card);
+    });
+  };
+  const prodPane=el("div",{class:"panel"},
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},"2 · Products"),
+      el("div",{class:"sub"},"One per line, in your own words"))),
+    el("div",{class:"panel-b"},
+      field("What goes in the box",el("textarea",{rows:5,
+        placeholder:"Rosemary hair oil 200 ml\nSBL 200 ml\nLip balm old both\nHair growth serum roll on",
+        oninput:e=>{QS.prodRaw=e.target.value;qsParseProducts();drawProd();qsFoot();}},QS.prodRaw),
+        {hint:"“2 bottle” sets quantity. “both” picks two. “A & B” on one line splits into two."}),
+      el("div",{style:"height:12px"}), prodOut));
+  drawProd(); grid.appendChild(prodPane);
+  wrap.appendChild(grid);
+
+  /* ---- 3. details ---- */
+  wrap.appendChild(el("div",{class:"panel",style:"margin-top:16px"},
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},"3 · The collab"),
+      el("div",{class:"sub"},"Fee is optional — leave it for later if it is not agreed yet"))),
+    el("div",{class:"panel-b"},el("div",{class:"grid2"},
+      field("Campaign month",input(QS.month,v=>{QS.month=v;},{type:"month"})),
+      field("Deliverable",select(QS.deliverable,DELIVERABLES,v=>{QS.deliverable=v;})),
+      field("Platform",select(QS.platform,PLATFORMS,v=>{QS.platform=v;})),
+      field("Box type",select(QS.box,BOXES,v=>{QS.box=v;})),
+      field("Locked fee (₹)",input(QS.price,v=>{QS.price=num(v);},{type:"number",min:"0",disabled:QS.barter?true:null})),
+      el("label",{class:"f"},el("span",{},"Barter"),
+        el("div",{style:"display:flex;align-items:center;gap:8px;padding-top:7px"},
+          el("input",{type:"checkbox",style:"width:auto",checked:QS.barter?true:null,
+            onchange:e=>{QS.barter=e.target.checked; if(QS.barter) QS.price=0; render();}}),
+          el("span",{style:"font-size:13px"},"Product only"))),
+      field("Note for packing",input(QS.notes,v=>{QS.notes=v;},{placeholder:"Handwritten note, shade…"}),{span:true})))));
+
+  /* ---- queue ---- */
+  if(QS.queue.length){
+    const tb=el("tbody",{});
+    QS.queue.forEach(id=>{ const c=S.collabs[id]; if(!c) return;
+      tb.appendChild(el("tr",{},
+        el("td",{},(c.ship||{}).name),
+        el("td",{class:"mono"},[(c.ship||{}).city,(c.ship||{}).state].filter(Boolean).join(", ")),
+        el("td",{class:"mono"},(c.items||[]).map(i=>i.sku+"×"+i.qty).join(", ")),
+        el("td",{},el("span",{class:"tag "+(c.box==="PR Box"?"pr":"")},c.box))));
+    });
+    wrap.appendChild(el("div",{style:"margin-top:16px"},el("div",{class:"panel"},
+      el("div",{class:"panel-h"},el("div",{},el("h3",{},"Ready in this batch"),
+        el("div",{class:"sub"},QS.queue.length+" shipment"+(QS.queue.length>1?"s":"")+" saved — download them as one UC file"))),
+      el("div",{class:"tw"},el("table",{},tb)))));
+  }
+
+  /* ---- action bar ---- */
+  const foot=el("div",{class:"selbar",style:"max-width:1000px"});
+  wrap.appendChild(foot);
+  function qsFoot(){
+    foot.innerHTML="";
+    const probs=qsProblems(), items=qsItems();
+    foot.appendChild(el("span",{class:"n"},String(items.length)));
+    foot.appendChild(el("span",{},"product"+(items.length===1?"":"s")+" ready"));
+    if(probs.length) foot.appendChild(el("span",{style:"font-size:12.5px;opacity:.85"},"· "+probs[0]+(probs.length>1?" (+"+(probs.length-1)+" more)":"")));
+    foot.appendChild(el("span",{style:"flex:1"}));
+    foot.appendChild(el("button",{class:"btn btn-sm",disabled:probs.length?true:null,
+      onclick:()=>qsSave(false)},"Save & add another"));
+    foot.appendChild(el("button",{class:"btn btn-sm btn-s",disabled:(probs.length&&!QS.queue.length)?true:null,
+      onclick:()=>qsSave(true)}, QS.queue.length&&probs.length ? "Download UC file ("+QS.queue.length+")" : "Save & download UC file"));
+  }
+  qsFoot();
+  return wrap;
+}
+
+async function qsSave(download){
+  const probs=qsProblems();
+  if(probs.length && !(download && QS.queue.length)){ toast(probs[0],true); return; }
+  if(!probs.length){
+    const r=QS.rec, ph=phone10(r.phone);
+    let inf=Object.values(S.influencers).find(i=>ph.length===10&&phone10(i.phone)===ph);
+    const body={name:titleCase(r.name),phone:ph,email:r.email||"",addr1:r.addr1,addr2:r.addr2,
+      city:titleCase(r.city),state:r.state,pin:digits(r.pin),platform:QS.platform};
+    if(inf) await Store.put("influencers",{...inf,...body});
+    else { inf={id:uid("inf"),handle:"",tier:TIERS[1],category:CATEGORIES[0],notes:"",createdAt:todayISO(),...body};
+           await Store.put("influencers",inf); }
+    for(const l of QS.lines) if(l.remember && l.picks.filter(Boolean).length===1)
+      await rememberAlias(l.raw, l.picks[0]);
+    const c={...blankCollab(), influencerId:inf.id, month:QS.month, platform:QS.platform,
+      deliverable:QS.deliverable, box:QS.box, items:qsItems(), notes:QS.notes,
+      price:QS.barter?0:num(QS.price), barter:QS.barter,
+      payStatus:QS.barter?"Not Applicable (Barter)":"Not Due",
+      ship:{name:titleCase(r.name),phone:ph,email:r.email||"",addr1:r.addr1,addr2:r.addr2,
+            city:titleCase(r.city),state:r.state,pin:digits(r.pin)},
+      shipStatus:"Ready to Ship", requestedAt:todayISO()};
+    const id=await Store.put("collabs",c);
+    QS.queue.push(id);
+    qsBlank();
+    toast(download?"Saved":"Saved — next one");
+  }
+  if(download){
+    UI.sel=new Set(QS.queue);
+    const ids=[...QS.queue];
+    render();
+    openBulkBuild();
+    QS.queue=ids;
+  } else render();
 }
 </script>
 
