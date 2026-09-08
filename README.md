@@ -32,36 +32,39 @@ retypes an address, a SKU or a tracking number.
 
 ## The Unicommerce bulk file
 
-`templates/unicommerce-bulk-order-template.csv` — the real 73-column sale-order
-import header, headers verbatim including the `*` on mandatory columns.
-`templates/unicommerce-bulk-order-sample.csv` — two orders, one of them with two SKUs.
+Built to match a sale-order file the team actually uploaded successfully, rather
+than a guess at the template — same 71 columns, same values, same conventions.
 
-The five mandatory columns are always filled:
+`templates/unicommerce-bulk-order-template.csv` — the header row.
+`templates/unicommerce-bulk-order-sample.csv` — two orders of three products each.
 
 | Column | Filled with |
 |---|---|
-| `Sales Order Code*` | `PR-YYMM-001`, written back onto the collab row |
+| `Sales Order Code*` | the running series, `PR632`, `PR633`, … continuing from the last used |
+| `Display Sales Order Code` | the same code |
 | `COD*` | `0` — every gifting order is prepaid |
-| `Sale Order Item Code*` | the order code plus the line number, e.g. `PR-2609-001-2` |
-| `Shipping Method*` | the value set in Setup; the export is blocked while it is blank |
-| `Item SKU Code*` | picked from the SKU master, never typed |
+| `Channel` | `PR` |
+| `Shipping Method*` | `STD` |
+| `Shipping / Billing Address Id` | `SENSE` |
+| `Sale Order Item Code*` | the SKU code itself |
+| `Item SKU Code*` | from the SKU master, never typed |
+| `Selling Price` | the SKU's MRP where one is recorded, else blank |
+| `Quantity` | blank when 1, the number when more |
 
-Other rules the generator follows:
+Prefix, next number, channel, shipping method and address id are all editable
+under **Setup**.
+
+Other rules:
 
 - **One row per item.** Five products in one order write five rows. Every column is
-  identical across them except `Item SKU Code*` (AJ), `Item Name` (AL) and
-  `Sale Order Item Code*` (AH), which UC requires to be unique per line.
-- **Gifting treatment** (Setup): Selling Price = MRP and Discount = MRP, so the box
-  carries its real value on the invoice while Prepaid Amount comes out ₹0. Switch to
-  *Charge MRP* if you ever bill a shipment.
-- **Payment Mode** `PREPAID`, **Currency Code** `INR`, both settable in Setup.
-- **Item Tag** carries the box type, the deliverable and the creator's handle, so the
-  packing team can see what it is without opening the dashboard.
+  identical across them except `Item SKU Code*` (AJ) and `Sale Order Item Code*` (AH),
+  which carry the SKU code.
+- **No byte-order mark, CRLF line endings** — as in the working file.
 - **State names come from a dropdown**, pincodes are forced to 6 digits and mobiles to
   10 — the three things that make UC reject a bulk file.
 
-Columns are remappable under **Setup → Unicommerce column mapping** if your template
-changes; **Reset to the UC template** puts back the 73 columns above.
+Columns are remappable under **Setup → Unicommerce column mapping**; **Reset to the UC
+template** puts back the 71 above.
 
 ## Running it
 
