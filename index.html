@@ -1,4 +1,4 @@
-<title>Reel to Doorstep</title>
+<title>HLPL Collab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
@@ -270,8 +270,7 @@ svg text{font-family:var(--sans)}
 <div class="topbar">
   <div class="topbar-in">
     <div class="brand">
-      <span class="brand-mark">Reel <em>&rarr;</em> Doorstep</span>
-      <span class="brand-sub">Hivefy Lifestyle</span>
+      <span class="brand-mark">HLPL <em>Collab</em></span>
     </div>
     <nav class="tabs" role="tablist" id="tabs"></nav>
     <div class="conn" id="conn"><span class="dot"></span><span>Connecting</span></div>
@@ -1029,7 +1028,7 @@ function lockScreen(){
   return el("div",{style:"max-width:420px;margin:12vh auto 0"},
     el("div",{class:"panel"},
       el("div",{class:"panel-b"},
-        el("h2",{style:"font-family:var(--display);font-size:20px;font-weight:700;margin-bottom:6px"},"Reel → Doorstep"),
+        el("h2",{style:"font-family:var(--display);font-size:20px;font-weight:700;margin-bottom:6px"},"HLPL Collab"),
         el("p",{style:"color:var(--ink-3);font-size:13px;margin:0 0 16px"},
           "One code for the whole team. It is remembered on this device, so you type it once."),
         el("details",{style:"margin:0 0 16px"},
@@ -1111,9 +1110,9 @@ function viewShip(){
       el("button",{class:"btn",onclick:openPasteBack},"Paste dispatch details"),
       el("button",{class:"btn",onclick:openBulkBuild},"Review first"),
       el("button",{class:"btn btn-s",onclick:downloadAllReady},
-        "Unicommerce"+(ready.length?" · "+ready.length:"")),
+        "Unicommerce"+(UI.sel.size?" · "+UI.sel.size+" picked":(ready.length?" · "+ready.length:""))),
       el("button",{class:"btn btn-p",onclick:downloadSelloship},
-        "Selloship"+(ready.length?" · "+ready.length:"")))));
+        "Selloship"+(UI.sel.size?" · "+UI.sel.size+" picked":(ready.length?" · "+ready.length:""))))));
 
   const L=collabList().filter(matches).filter(c=>c.shipStatus!=="Cancelled")
     .sort((a,b)=>{const r=SHIP_FLOW.indexOf(a.shipStatus)-SHIP_FLOW.indexOf(b.shipStatus);
@@ -1138,7 +1137,7 @@ function viewShip(){
   const tb=el("tbody",{});
   L.forEach(c=>{
     const probs=collabProblems(c), age=pendingAge(c);
-    const canPick=c.shipStatus==="Ready to Ship"&&!probs.length;
+    const canPick=c.shipStatus!=="Cancelled"&&!probs.length;
     const cb=el("input",{type:"checkbox",style:"width:auto",disabled:!canPick?true:null,
       checked:UI.sel.has(c.id)?true:null,"aria-label":"Select "+((c.ship||{}).name||""),
       onchange:e=>{e.target.checked?UI.sel.add(c.id):UI.sel.delete(c.id);render();}});
@@ -1168,12 +1167,17 @@ function viewShip(){
       ...["Influencer","Products / box","Destination","Stage","UC order code","Tracking",""].map(h=>el("th",{},h)))),
     tb))));
 
-  if(UI.sel.size) wrap.appendChild(el("div",{class:"selbar"},
-    el("span",{class:"n"},UI.sel.size), el("span",{},"selected"),
-    el("button",{class:"btn btn-sm",onclick:()=>{UI.sel.clear();render();}},"Clear"),
-    el("span",{style:"flex:1"}),
-    el("button",{class:"btn btn-sm",onclick:()=>bulkStatus("On Hold")},"Put on hold"),
-    el("button",{class:"btn btn-sm btn-s",onclick:openBulkBuild},"Build UC bulk file →")));
+  if(UI.sel.size){
+    const again=[...UI.sel].map(id=>S.collabs[id]).filter(c=>c&&c.ucCode).length;
+    wrap.appendChild(el("div",{class:"selbar"},
+      el("span",{class:"n"},UI.sel.size), el("span",{},"selected"),
+      again?el("span",{style:"font-size:12.5px;opacity:.85"},"· "+again+" already downloaded — the same order codes are reused"):null,
+      el("button",{class:"btn btn-sm",onclick:()=>{UI.sel.clear();render();}},"Clear"),
+      el("span",{style:"flex:1"}),
+      el("button",{class:"btn btn-sm",onclick:()=>bulkStatus("On Hold")},"Put on hold"),
+      el("button",{class:"btn btn-sm",onclick:downloadSelloship},"Selloship"),
+      el("button",{class:"btn btn-sm btn-s",onclick:downloadAllReady},"Unicommerce")));
+  }
   return wrap;
 }
 function median(a){const s=[...a].sort((x,y)=>x-y);const m=s.length>>1;
@@ -2237,6 +2241,25 @@ function parseAddressBlob(raw){
   if(!city) flags.push("City not found \u2014 type it in");
 
   let name=titleCase(lab.name||"");
+  let nameFromLead=false;
+  const nameLike=t=>{
+    const l=String(t||"").replace(/[^A-Za-z\s.]/g," ").replace(/\s+/g," ").trim();
+    if(!l) return "";
+    const ws=l.split(" ").filter(w=>w.length>1);
+    if(!ws.length||ws.length>4) return "";
+    if(/\d/.test(t)) return "";
+    if(ws.some(w=>ADDR_WORDS.has(w.toLowerCase()))) return "";
+    if(ws.some(w=>CITY_STATE[w.toLowerCase()]||STATES.some(st=>st.toLowerCase()===w.toLowerCase()))) return "";
+    return titleCase(l);
+  };
+  /* Teams write the creator's name on the first line, sometimes behind an
+     "Address:" label. That line is the name, not the street. */
+  if(!name){
+    const lead=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)[0]||"";
+    const stripped=lead.replace(LABEL_RE,"$2").trim() || lead;
+    const cand=nameLike(stripped);
+    if(cand){ name=cand; nameFromLead=true; }
+  }
   if(!name){
     for(const line of plain){
       const l=line.replace(/[\w.+-]+@[\w-]+\.[\w.]{2,}/g," ")
@@ -2247,12 +2270,22 @@ function parseAddressBlob(raw){
       if(!ws.length||ws.length>4) continue;
       if(ws.some(w=>ADDR_WORDS.has(w.toLowerCase()))) continue;
       if(ws.some(w=>CITY_STATE[w.toLowerCase()]||STATES.some(st=>st.toLowerCase()===w.toLowerCase()))) continue;
+      /* only the first line, or a name written beside the phone — a bare
+         locality line in the middle of an address is not a name */
+      const first = plain.indexOf(line)===0;
+      const byPhone = /(?:\+?91[\s\-.]?)?\b[6-9]\d{4}[\s\-.]?\d{5}\b/.test(line);
+      if(!first && !byPhone) continue;
       name=titleCase(l); break;
     }
   }
   if(!name) flags.push("No name in the message \u2014 ask the creator");
 
   let body=lab.address||plain.join("\n");
+  if(nameFromLead){
+    const lines=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    const rest=lines.slice(1).filter(l=>!LABEL_RE.test(l));
+    if(rest.length) body=rest.join("\n");
+  }
   if(email) body=body.split(email).join(" ");
   body=body.replace(/(?:\+?91[\s\-.]?)?\b[6-9]\d{4}[\s\-.]?\d{5}\b/g," ");
   if(pin) body=body.split(pin).join(" ");
@@ -3198,11 +3231,11 @@ function selloshipCsv(rows){
   return [head,...body].join("\r\n")+"\r\n";
 }
 async function downloadSelloship(){
-  const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
-  const clean=ready.filter(c=>!collabProblems(c).length);
+  const chosen=downloadScope();
+  const clean=chosen.filter(c=>!collabProblems(c).length);
   if(!clean.length){ openBulkBuild(); return; }
-  if(clean.length!==ready.length &&
-     !confirm((ready.length-clean.length)+" order(s) have an address or SKU problem and will be left out.\n\nContinue with the "+clean.length+" that are clean?")) return;
+  if(clean.length!==chosen.length &&
+     !confirm((chosen.length-clean.length)+" order(s) have an address or SKU problem and will be left out.\n\nContinue with the "+clean.length+" that are clean?")) return;
 
   const {rows,assigned}=buildSelloship(clean);
   const name="selloship-orders-"+todayISO();
@@ -3221,29 +3254,41 @@ async function downloadSelloship(){
     ok=await saveFile(name+".csv", selloshipCsv(rows));
   }
   if(!ok) return;
-  for(const {collab:c,code} of assigned)
-    await Store.put("collabs",{...S.collabs[c.id],ucCode:code,orderVia:"Selloship",shipStatus:"Order Created"});
-  UI.sel.clear();
-  toast(clean.length+" orders downloaded for Selloship and marked as created");
+  const again=clean.filter(c=>c.ucCode).length;
+  await markCreated(assigned,"Selloship");
+  toast(clean.length+" orders downloaded for Selloship"+(again?" ("+again+" re-downloaded)":""));
 }
 </script>
 
 <script>
 /* ================= bulk build + paste back ================= */
-/* Supply's morning job: every ready order, one file, one click. */
+/* What a download covers: the ticked rows if any are ticked, otherwise the
+   whole ready batch. Ticking lets supply pull an earlier batch again. */
+function downloadScope(){
+  return UI.sel.size ? [...UI.sel].map(id=>S.collabs[id]).filter(Boolean)
+                     : collabList().filter(c=>c.shipStatus==="Ready to Ship");
+}
+/* A re-download keeps the order code it already has and never moves a row
+   backwards — only a row still waiting becomes "Order created". */
+async function markCreated(assigned, via){
+  for(const {collab:c,code} of assigned){
+    const cur=S.collabs[c.id]; if(!cur) continue;
+    await Store.put("collabs",{...cur, ucCode:cur.ucCode||code, orderVia:via,
+      shipStatus: cur.shipStatus==="Ready to Ship" ? "Order Created" : cur.shipStatus});
+  }
+  UI.sel.clear();
+}
 async function downloadAllReady(){
-  const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
-  const clean=ready.filter(c=>!collabProblems(c).length);
-  if(!String(S.settings.shipMethod||"").trim() || !clean.length || clean.length!==ready.length){
+  const chosen=downloadScope();
+  const clean=chosen.filter(c=>!collabProblems(c).length);
+  if(!String(S.settings.shipMethod||"").trim() || !clean.length || clean.length!==chosen.length){
     openBulkBuild(); return;   // something needs a look — show the review panel instead
   }
   const {csv,assigned}=buildUCFile(clean);
-  const ok=await saveFile("uc-bulk-orders-"+todayISO()+".csv",csv);
-  if(!ok) return;
-  for(const {collab:c,code} of assigned)
-    await Store.put("collabs",{...S.collabs[c.id],ucCode:code,shipStatus:"Order Created"});
-  UI.sel.clear();
-  toast(clean.length+" orders downloaded and marked as created in UC");
+  if(!await saveFile("uc-bulk-orders-"+todayISO()+".csv",csv)) return;
+  const again=clean.filter(c=>c.ucCode).length;
+  await markCreated(assigned,"Unicommerce");
+  toast(clean.length+" orders downloaded"+(again?" ("+again+" re-downloaded)":" and marked as created in UC"));
 }
 function openBulkBuild(){
   const chosen = UI.sel.size

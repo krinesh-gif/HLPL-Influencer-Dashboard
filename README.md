@@ -1,4 +1,4 @@
-# Reel → Doorstep
+# HLPL Collab
 
 A single-page dashboard that replaces the WhatsApp group between the influencer
 marketing team and the supply team at Hivefy Lifestyle (Aravi Organic).
