@@ -22,9 +22,10 @@ retypes an address, a SKU or a tracking number.
 - **New shipment** — marketing's page. Paste the address, add the products either by
   pasting a list or searching the catalogue, save. There is no download here on purpose:
   entries pile up through the day and supply takes them as one file the next morning.
-- **Ship queue** — supply's page. **Download UC file · N orders** builds every ready
-  order into one sheet, saves it, and marks them created in UC, in a single click.
-  *Review first* opens the same batch for checking before it downloads.
+- **Ship queue** — supply's page. Two one-click downloads of the same ready batch:
+  **Unicommerce** (CSV, one row per item) and **Selloship** (xlsx, one row per parcel).
+  Either saves the file and marks the orders created. *Review first* opens the batch
+  for checking before downloading.
 - **Collabs** — the register. Locked price, payment state, box contents, shipment stage.
 - **Content** — post date, link, views, reach, likes, comments, shares, saves; ER, CPV and CPE computed.
 - **Influencers** — the master. Address, pincode, mobile, tier, category, full collab history, one-click repeat.
@@ -67,6 +68,31 @@ Other rules:
 
 Columns are remappable under **Setup → Unicommerce column mapping**; **Reset to the UC
 template** puts back the 71 above.
+
+## The Selloship file
+
+Selloship is a courier aggregator, so its unit is the parcel: **one row per order**,
+where Unicommerce writes one row per item. `templates/selloship-bulk-order-sample.xlsx`
+is a generated example.
+
+| Column | Filled with |
+|---|---|
+| `product_name` | every product in the box, joined with ` + ` |
+| `sku` | the SKU codes, joined with ` \| ` |
+| `qty` | total units in the parcel |
+| `price` / `old_price` | the box value at MRP, or the fallback declared value |
+| `first_name` / `last_name` | the consignee name split; `.` when there is no surname |
+| `address` / `landmark` | address line 1, and line 2 as the landmark |
+| `payment_method` | `4` (prepaid) |
+| `custom_order_id` | the same `PR632` code the Unicommerce file uses |
+| `L` / `B` / `H` | the dimensions set per box type |
+
+Declared value, payment method and the dimensions for each box type are set under
+**Setup → Selloship defaults**. Couriers reject a zero-value parcel, so when the SKUs
+carry no MRP the fallback value is used.
+
+The workbook is built in the browser with SheetJS from the CDN; if that script cannot
+load, the same columns are saved as CSV rather than nothing.
 
 ## Running it
 

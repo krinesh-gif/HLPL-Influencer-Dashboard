@@ -2,6 +2,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --paper:#FBF8F9; --surface:#FFFFFF; --surface-2:#F5F0F3; --surface-3:#EFE8EC;
@@ -405,6 +406,8 @@ const DEFAULT_SETTINGS = {
   channel:"PR", facility:"", country:"India", orderPrefix:"PR",
   gifting:false, shippingCharge:0, brand:"Aravi Organic",
   shipMethod:"STD", currency:"INR", addressId:"SENSE", orderNextNo:632,
+  selloshipPayment:4, declaredValue:500,
+  boxDims:{"PR Box":{l:25,b:20,h:12},"Normal Box":{l:20,b:15,h:10}},
   ucColumns:UC_DEFAULT_COLUMNS, ucVersion:UC_TEMPLATE_VERSION
 };
 
@@ -1103,12 +1106,14 @@ function viewShip(){
   const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Ship queue"),
-      el("p",{},"Everything marketing added is here. One click gives you the whole batch as a single Unicommerce file; paste the dispatch export back when it ships.")),
+      el("p",{},"Everything marketing added is here. One click gives you the whole batch as a single file — Unicommerce, or Selloship when you are shipping direct. Paste the dispatch export back when it ships.")),
     el("div",{class:"head-actions"},
       el("button",{class:"btn",onclick:openPasteBack},"Paste dispatch details"),
       el("button",{class:"btn",onclick:openBulkBuild},"Review first"),
       el("button",{class:"btn btn-s",onclick:downloadAllReady},
-        "Download UC file"+(ready.length?" · "+ready.length+" order"+(ready.length>1?"s":""):"")))));
+        "Unicommerce"+(ready.length?" · "+ready.length:"")),
+      el("button",{class:"btn btn-p",onclick:downloadSelloship},
+        "Selloship"+(ready.length?" · "+ready.length:"")))));
 
   const L=collabList().filter(matches).filter(c=>c.shipStatus!=="Cancelled")
     .sort((a,b)=>{const r=SHIP_FLOW.indexOf(a.shipStatus)-SHIP_FLOW.indexOf(b.shipStatus);
@@ -1555,6 +1560,25 @@ function viewSetup(){
         field("Shipping charge per line",input(s.shippingCharge,v=>{s.shippingCharge=num(v);save();},{type:"number",min:"0"})),
         field("Value treatment",select(s.gifting?"gift":"charge",[["charge","Selling price only — as on your past uploads"],["gift","Gifting — price with a matching discount, net ₹0"]],
           v=>{s.gifting=(v==="gift");save();}),{hint:"Your working file filled Selling Price and left Discount empty."})))));
+
+  const dim=(box,k)=>((s.boxDims||{})[box]||{})[k]||"";
+  const setDim=(box,k,v)=>{ s.boxDims={...(s.boxDims||{})}; s.boxDims[box]={...(s.boxDims[box]||{}),[k]:num(v)}; save(); };
+  wrap.appendChild(el("div",{class:"panel",style:"margin-bottom:16px"},
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},"Selloship defaults"),
+      el("div",{class:"sub"},"One row per parcel, so the box size and declared value come from here"))),
+    el("div",{class:"panel-b"},
+      el("div",{class:"grid2"},
+        field("Payment method",select(String(num(s.selloshipPayment)||4),[["4","4 — Prepaid"],["3","3 — COD"]],
+          v=>{s.selloshipPayment=num(v);save();})),
+        field("Declared value when no MRP (₹)",input(s.declaredValue,v=>{s.declaredValue=num(v);save();},{type:"number",min:"0"}),
+          {hint:"Couriers reject a ₹0 parcel. Used only when the SKUs carry no MRP."})),
+      ...BOXES.map(box=>el("div",{style:"margin-top:12px"},
+        el("div",{style:"font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px"},
+          box+" — dimensions in cm"),
+        el("div",{class:"grid3"},
+          field("Length",input(dim(box,"l"),v=>setDim(box,"l",v),{type:"number",min:"0"})),
+          field("Breadth",input(dim(box,"b"),v=>setDim(box,"b",v),{type:"number",min:"0"})),
+          field("Height",input(dim(box,"h"),v=>setDim(box,"h",v),{type:"number",min:"0"}))))))));
 
   const cols=s.ucColumns||UC_DEFAULT_COLUMNS;
   const mapBody=el("div",{});
@@ -3114,6 +3138,93 @@ async function qsSave(){
   qsBlank();
   toast("Saved — supply will pick it up");
   render();
+}
+</script>
+
+<script>
+/* ================= Selloship bulk order file =================
+   A courier aggregator, so the unit is the parcel: one row per order,
+   not per item. Products and SKUs are joined into their columns. */
+const SELLOSHIP_COLUMNS = ["product_name","price","old_price","first_name","last_name",
+  "mobile_no","alt_mobile_no","email","address","state","city","zip_code","landmark",
+  "payment_method(3==COD/4==prepaid)","qty","custom_order_id","sku","discount_price",
+  "L (cm)","B (cm)","H (cm)"];
+
+function splitName(full){
+  const parts=String(full||"").trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return {first:"",last:"."};
+  if(parts.length===1) return {first:parts[0],last:"."};
+  return {first:parts[0], last:parts.slice(1).join(" ")};
+}
+function selloshipRow(c){
+  const s=S.settings, st=c.ship||{}, items=c.items||[];
+  const {first,last}=splitName(st.name);
+  const dims=(s.boxDims||{})[c.box]||{};
+  const value=items.reduce((t,i)=>t+num(i.mrp)*(num(i.qty)||1),0) || num(s.declaredValue) || 0;
+  const qty=items.reduce((t,i)=>t+(num(i.qty)||1),0)||1;
+  return {
+    "product_name": items.map(i=>i.name||i.sku).join(" + ") || (c.box||"PR Box"),
+    "price": value, "old_price": value,
+    "first_name": first, "last_name": last,
+    "mobile_no": phone10(st.phone), "alt_mobile_no": "",
+    "email": st.email||"",
+    /* line 2 goes in landmark, so it must not be repeated in address */
+    "address": st.addr1||"",
+    "state": st.state||"", "city": st.city||"", "zip_code": digits(st.pin),
+    "landmark": st.addr2 || ".",
+    "payment_method(3==COD/4==prepaid)": num(s.selloshipPayment)||4,
+    "qty": qty,
+    "custom_order_id": c.ucCode||"",
+    "sku": items.map(i=>i.sku).join(" | "),
+    "discount_price": "",
+    "L (cm)": dims.l||"", "B (cm)": dims.b||"", "H (cm)": dims.h||""
+  };
+}
+function buildSelloship(collabs){
+  const gen=nextOrderCode(); let fresh=0;
+  const assigned=collabs.map(c=>{
+    const reused=!!c.ucCode;
+    if(!reused) fresh++;
+    return {collab:c, code:c.ucCode||gen(fresh), reused};
+  });
+  const rows=assigned.map(({collab:c,code})=>selloshipRow({...c,ucCode:code}));
+  return {rows, assigned};
+}
+/* SheetJS is loaded from the CDN; if it is unavailable we still hand over a
+   CSV of exactly the same columns rather than nothing. */
+function selloshipCsv(rows){
+  const head=SELLOSHIP_COLUMNS.map(csvCell).join(",");
+  const body=rows.map(r=>SELLOSHIP_COLUMNS.map(h=>csvCell(r[h])).join(","));
+  return [head,...body].join("\r\n")+"\r\n";
+}
+async function downloadSelloship(){
+  const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
+  const clean=ready.filter(c=>!collabProblems(c).length);
+  if(!clean.length){ openBulkBuild(); return; }
+  if(clean.length!==ready.length &&
+     !confirm((ready.length-clean.length)+" order(s) have an address or SKU problem and will be left out.\n\nContinue with the "+clean.length+" that are clean?")) return;
+
+  const {rows,assigned}=buildSelloship(clean);
+  const name="selloship-orders-"+todayISO();
+  let ok=false;
+  if(window.XLSX){
+    try{
+      const ws=XLSX.utils.json_to_sheet(rows,{header:SELLOSHIP_COLUMNS});
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,ws,"Sheet1");
+      const buf=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+      ok=await saveFile(name+".xlsx", buf);
+    }catch(e){ ok=false; }
+  }
+  if(!ok && !window.XLSX){
+    toast("Excel builder did not load — saving the same columns as CSV",true);
+    ok=await saveFile(name+".csv", selloshipCsv(rows));
+  }
+  if(!ok) return;
+  for(const {collab:c,code} of assigned)
+    await Store.put("collabs",{...S.collabs[c.id],ucCode:code,orderVia:"Selloship",shipStatus:"Order Created"});
+  UI.sel.clear();
+  toast(clean.length+" orders downloaded for Selloship and marked as created");
 }
 </script>
 
