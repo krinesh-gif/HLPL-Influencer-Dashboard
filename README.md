@@ -84,6 +84,7 @@ is a generated example.
 | `first_name` / `last_name` | the consignee name split; `.` when there is no surname |
 | `address` / `landmark` | address line 1, and line 2 as the landmark |
 | `payment_method` | `4` (prepaid) |
+| `alt_mobile_no` | the same number as `mobile_no` — Selloship rejects it blank |
 | `custom_order_id` | the same `PR632` code the Unicommerce file uses |
 | `L` / `B` / `H` | the dimensions set per box type |
 
