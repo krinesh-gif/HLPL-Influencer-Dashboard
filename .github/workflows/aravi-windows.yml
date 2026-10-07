@@ -47,3 +47,17 @@ jobs:
           name: AraviOutreach-Windows
           path: desktop-outreach/dist/AraviOutreach/
           retention-days: 30
+          include-hidden-files: true
+      - name: Download the exact uploaded application
+        uses: actions/download-artifact@v4
+        with:
+          name: AraviOutreach-Windows
+          path: ${{ runner.temp }}/Aravi downloaded artifact
+      - name: Verify downloaded application and full browser
+        run: |
+          $downloaded = Join-Path $env:RUNNER_TEMP 'Aravi downloaded artifact'
+          python verify_artifact.py dist\AraviOutreach "$downloaded"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $process = Start-Process -FilePath (Join-Path $downloaded 'AraviOutreach.exe') -ArgumentList '--self-test' -PassThru
+          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'Downloaded application timed out' }
+          if ($process.ExitCode -ne 0) { throw "Downloaded application failed: $($process.ExitCode)" }
