@@ -207,11 +207,14 @@ if __name__ == '__main__':
         probe.update()
         probe.destroy()
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.set_content('<title>Aravi packaged browser test</title>')
-            assert page.title() == 'Aravi packaged browser test'
-            browser.close()
+            # Match the real login launch path, not the separate headless shell.
+            import tempfile
+            with tempfile.TemporaryDirectory() as profile_dir:
+                browser = p.chromium.launch_persistent_context(profile_dir, headless=False)
+                page = browser.new_page()
+                page.set_content('<title>Aravi packaged browser test</title>')
+                assert page.title() == 'Aravi packaged browser test'
+                browser.close()
         sys.exit(0)
     root = tk.Tk()
     App(root)

@@ -33,10 +33,15 @@ jobs:
         run: python -m PyInstaller --clean --noconfirm AraviOutreach.spec
       - name: Verify packaged application and browser
         run: |
-          $process = Start-Process -FilePath '.\dist\AraviOutreach\AraviOutreach.exe' -ArgumentList '--self-test' -PassThru
+          $headed = Get-ChildItem 'dist\AraviOutreach\_internal\playwright\driver\package\.local-browsers\chromium-*\chrome-win64\chrome.exe'
+          if (-not $headed) { throw 'Headed Chromium is missing from the package' }
+          Copy-Item WINDOWS_README.txt dist\AraviOutreach\READ_ME_FIRST.txt
+          Compress-Archive -Path dist\AraviOutreach\* -DestinationPath dist\AraviOutreach-Windows.zip
+          $relocated = Join-Path $env:RUNNER_TEMP 'Aravi extracted test'
+          Expand-Archive dist\AraviOutreach-Windows.zip $relocated
+          $process = Start-Process -FilePath (Join-Path $relocated 'AraviOutreach.exe') -ArgumentList '--self-test' -PassThru
           if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'Packaged smoke test timed out' }
           if ($process.ExitCode -ne 0) { throw "Packaged smoke test failed: $($process.ExitCode)" }
-          Copy-Item WINDOWS_README.txt dist\AraviOutreach\READ_ME_FIRST.txt
       - uses: actions/upload-artifact@v4
         with:
           name: AraviOutreach-Windows
