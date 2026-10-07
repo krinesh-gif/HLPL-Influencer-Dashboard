@@ -113,38 +113,83 @@ class App:
         self.root = root
         self.commands, self.events, self.stop = queue.Queue(), queue.Queue(), threading.Event()
         self.busy = False
-        root.title('Aravi • Instagram First Outreach — Prototype')
-        root.geometry('850x760')
-        wrap = ttk.Frame(root, padding=20)
-        wrap.pack(fill='both', expand=True)
-        ttk.Label(wrap, text='Instagram First Outreach', font=('Arial', 22, 'bold')).pack(anchor='w')
-        ttk.Label(wrap, text='Local browser • One first message • Manual replies • English Instagram UI').pack(anchor='w', pady=8)
-        ttk.Label(wrap, text='Sender Instagram username (must match the logged-in account)').pack(anchor='w')
-        self.sender = ttk.Entry(wrap)
-        self.sender.pack(fill='x', pady=4)
-        ttk.Label(wrap, text='Profile links — one per line, maximum 25 per batch').pack(anchor='w')
-        self.links = tk.Text(wrap, height=7)
-        self.links.pack(fill='x', pady=4)
-        ttk.Button(wrap, text='Import Excel / CSV', command=self.import_file).pack(anchor='w')
-        ttk.Label(wrap, text='Your exact introduction message').pack(anchor='w', pady=(10,0))
-        self.message = tk.Text(wrap, height=5)
-        self.message.pack(fill='x', pady=4)
-        buttons = ttk.Frame(wrap)
-        buttons.pack(fill='x', pady=10)
-        for label, action in [('1. Open login browser', self.login), ('2. Prepare one draft', lambda:self.run(True)), ('3. Start batch', lambda:self.run(False)), ('Stop', self.stop.set), ('Export results', self.export)]:
-            ttk.Button(buttons, text=label, command=action).pack(side='left', padx=3)
-        ttk.Label(wrap, text='Stop takes effect before the next send; an in-progress send may complete.\nNo account-safety guarantee. Unknown outcomes are never automatically retried.').pack(anchor='w')
-        self.log = tk.Text(wrap, height=12, state='disabled')
-        self.log.pack(fill='both', expand=True, pady=10)
+        root.title('Aravi Studio • Creator Outreach')
+        root.geometry('1040x850')
+        root.minsize(860, 640)
+        root.configure(bg='#F5F3FA')
+        root.option_add('*Font', ('Segoe UI', 10))
+        canvas = tk.Canvas(root,bg='#F5F3FA',highlightthickness=0)
+        scroll = ttk.Scrollbar(root,orient='vertical',command=canvas.yview)
+        scroll.pack(side='right',fill='y')
+        canvas.pack(side='left',fill='both',expand=True)
+        canvas.configure(yscrollcommand=scroll.set)
+        wrap = tk.Frame(canvas, bg='#F5F3FA', padx=28, pady=22)
+        window = canvas.create_window((0,0),window=wrap,anchor='nw')
+        wrap.bind('<Configure>',lambda e:canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>',lambda e:canvas.itemconfigure(window,width=e.width))
+        header = tk.Frame(wrap, bg='#F5F3FA')
+        header.pack(fill='x', pady=(0,18))
+        tk.Label(header, text='aravi / studio', font=('Segoe UI',24,'bold'), fg='#211936', bg='#F5F3FA').pack(side='left')
+        tk.Label(header, text=' CREATOR OUTREACH  /  BETA ', font=('Segoe UI',9,'bold'), fg='#5A36CD', bg='#EAE2FF', padx=12,pady=8).pack(side='right')
+        hero = tk.Frame(wrap, bg='#6D43E5', padx=22,pady=16)
+        hero.pack(fill='x', pady=(0,18))
+        tk.Label(hero,text='Make the first hello count.',font=('Segoe UI',25,'bold'),fg='white',bg='#6D43E5').pack(anchor='w')
+        tk.Label(hero,text='Your list. Your voice. One place to start creator conversations.',fg='#F0E9FF',bg='#6D43E5').pack(anchor='w',pady=(4,0))
+        tk.Label(hero,text=' 01  CONNECT     /     02  CHECK A DRAFT     /     03  LAUNCH ',font=('Segoe UI',9,'bold'),fg='#D8FFA4',bg='#6D43E5').pack(anchor='w',pady=(12,0))
+        card = tk.Frame(wrap,bg='white',padx=20,pady=16)
+        card.pack(fill='x')
+        tk.Label(card,text='Your sending account',font=('Segoe UI',11,'bold'),fg='#211936',bg='white').pack(anchor='w')
+        tk.Label(card,text='Use the username of the account you will log into. Instagram language: English.',fg='#716A80',bg='white',font=('Segoe UI',9)).pack(anchor='w',pady=(2,6))
+        self.sender = tk.Entry(card,bg='#F5F3FA',fg='#211936',relief='flat',font=('Segoe UI',11),insertbackground='#6D43E5')
+        self.sender.pack(fill='x',ipady=7)
+        columns = tk.Frame(wrap,bg='#F5F3FA')
+        columns.pack(fill='x',pady=14)
+        columns.columnconfigure(0,weight=1)
+        columns.columnconfigure(1,weight=1)
+        left = tk.Frame(columns,bg='white',padx=18,pady=16)
+        left.grid(row=0,column=0,sticky='nsew',padx=(0,7))
+        right = tk.Frame(columns,bg='white',padx=18,pady=16)
+        right.grid(row=0,column=1,sticky='nsew',padx=(7,0))
+        tk.Label(left,text='01 / Creator list',font=('Segoe UI',13,'bold'),fg='#211936',bg='white').pack(anchor='w')
+        tk.Label(left,text='One Instagram profile link per line • Up to 25 per batch',font=('Segoe UI',9),fg='#716A80',bg='white').pack(anchor='w',pady=(3,10))
+        self.links = tk.Text(left,height=6,width=35,bg='#F5F3FA',fg='#211936',relief='flat',font=('Segoe UI',10),padx=10,pady=10,wrap='word',insertbackground='#6D43E5')
+        self.links.pack(fill='x')
+        self.button(left,'Import Excel / CSV',self.import_file,'#E7FFF3','#187A58').pack(anchor='w',pady=(10,0))
+        tk.Label(right,text='02 / Your introduction',font=('Segoe UI',13,'bold'),fg='#211936',bg='white').pack(anchor='w')
+        tk.Label(right,text='The exact message your creators will receive',font=('Segoe UI',9),fg='#716A80',bg='white').pack(anchor='w',pady=(3,10))
+        self.message = tk.Text(right,height=6,width=35,bg='#F5F3FA',fg='#211936',relief='flat',font=('Segoe UI',11),padx=10,pady=10,wrap='word',insertbackground='#6D43E5')
+        self.message.pack(fill='x')
+        tk.Label(right,text='Start with one team-owned test profile.',fg='#9A5B35',bg='#FFF0E4',padx=10,pady=7,font=('Segoe UI',9)).pack(anchor='w',pady=(10,0))
+        buttons = tk.Frame(wrap,bg='#F5F3FA')
+        buttons.pack(fill='x',pady=(0,12))
+        for label, action, bg, fg in [('Open login browser',self.login,'#EAE2FF','#5A36CD'),('Prepare one draft',lambda:self.run(True),'#EAE2FF','#5A36CD'),('Start batch',lambda:self.run(False),'#6D43E5','white'),('Stop',self.stop.set,'#FFE1E3','#B6374D'),('Export results',self.export,'#E7FFF3','#187A58')]:
+            self.button(buttons,label,action,bg,fg).pack(side='left',padx=(0,8))
+        activity = tk.Frame(wrap,bg='#211936',padx=18,pady=14)
+        activity.pack(fill='both',expand=True)
+        row = tk.Frame(activity,bg='#211936')
+        row.pack(fill='x')
+        tk.Label(row,text='Activity',font=('Segoe UI',12,'bold'),fg='white',bg='#211936').pack(side='left')
+        self.status = tk.Label(row,text='READY',font=('Segoe UI',9,'bold'),fg='#D8FFA4',bg='#211936')
+        self.status.pack(side='right')
+        self.log = tk.Text(activity,height=6,state='disabled',bg='#211936',fg='#E4DEF4',relief='flat',font=('Segoe UI',10),wrap='word',pady=10)
+        self.log.pack(fill='both',expand=True)
+        tk.Label(wrap,text='Replies stay in Instagram. Results record send attempts, not delivery. Stop applies before the next send.\nAn in-progress send may complete. No account-safety guarantee; uncertain attempts are not retried automatically.',fg='#716A80',bg='#F5F3FA',font=('Segoe UI',9),justify='left').pack(anchor='w',pady=(10,0))
         threading.Thread(target=worker, args=(self.commands,self.events,self.stop), daemon=True).start()
         root.after(100, self.poll)
         root.protocol('WM_DELETE_WINDOW', self.close)
+
+    def button(self, parent, label, action, bg, fg):
+        return tk.Button(parent,text=label,command=action,bg=bg,fg=fg,
+                         activebackground=bg,activeforeground=fg,relief='flat',
+                         borderwidth=0,padx=14,pady=10,cursor='hand2',
+                         font=('Segoe UI',10,'bold'))
 
     def poll(self):
         while not self.events.empty():
             text = self.events.get()
             if text == '__idle__':
                 self.busy = False
+                self.status.configure(text='READY',fg='#D8FFA4')
             else:
                 self.log.configure(state='normal')
                 self.log.insert('end', text + '\n')
@@ -155,6 +200,7 @@ class App:
     def login(self):
         if not self.busy:
             self.busy = True
+            self.status.configure(text='CONNECTING',fg='#E4DEF4')
             self.commands.put(('login',))
 
     def import_file(self):
@@ -180,6 +226,7 @@ class App:
             if not draft and not messagebox.askyesno('Review batch before sending', f'Sender: @{sender}\nRecipients ({len(profiles)}):\n'+', '.join('@'+u for u in profiles)+'\n\nExact message:\n'+message+'\n\nAttempt these first DMs now?'):
                 return
             self.busy = True
+            self.status.configure(text='DRAFT CHECK' if draft else 'RUNNING',fg='#D8FFA4')
             self.commands.put(('run',sender,profiles,message,draft))
         except ValueError as e:
             messagebox.showerror('Check input', str(e))
@@ -203,8 +250,10 @@ if __name__ == '__main__':
         from playwright.sync_api import sync_playwright
         import openpyxl
         probe = tk.Tk()
-        probe.withdraw()
+        App(probe)
         probe.update()
+        assert probe.title() == 'Aravi Studio • Creator Outreach'
+        assert probe.winfo_width() >= 860
         probe.destroy()
         with sync_playwright() as p:
             # Match the real login launch path, not the separate headless shell.
