@@ -1045,7 +1045,7 @@ function lockScreen(){
         el("details",{style:"margin:0 0 16px"},
           el("summary",{style:"font-size:12.5px;color:var(--ink-2);cursor:pointer"},"Don\u2019t know the code?"),
           el("div",{style:"font-size:12.5px;color:var(--ink-3);line-height:1.6;margin-top:8px"},
-            "Ask whoever set this board up \u2014 they chose it.",
+            "Ask whoever set this board up. Marketing and supply have different codes \u2014 make sure you were given the right one.",
             el("div",{style:"margin-top:8px"},
               el("b",{style:"color:var(--ink-2)"},"If that is you:"),
               " it is the ",el("span",{class:"mono"},"TEAM_CODE"),
@@ -1069,13 +1069,16 @@ function diagPanel(){
   return el("div",{class:"panel",style:"margin-bottom:16px"},
     el("div",{class:"panel-h"},el("div",{},el("h3",{},"Connection details"),
       el("div",{class:"sub"},"What this page can see. Send a screenshot of this if it will not connect.")),
-      el("button",{class:"btn btn-sm",style:"margin-left:auto",onclick:retryConnect},"Retry connection")),
+      el("div",{style:"margin-left:auto;display:flex;gap:8px"},
+        Store.api.code()?el("button",{class:"btn btn-sm",onclick:signOut},"Sign out"):null,
+        el("button",{class:"btn btn-sm",onclick:retryConnect},"Retry connection"))),
     (Store.mode!=="live"&&Store.mode!=="neon")?el("div",{class:"panel-b",style:"padding-bottom:0"},
       el("div",{class:"callout crit"},el("b",{},"Not connected. "),
         "Claude artifact database: "+(d.why||"available")+". Data API: "+(d.apiWhy||d.api||"not tried")+".")):null,
     el("div",{class:"tw"},el("table",{},el("tbody",{},
       row("Data source",{live:"Claude artifact database",neon:"Neon (this deployment)",
                           locked:"Neon — team code needed",local:"none — this browser only"}[Store.mode]||Store.mode),
+      row("Signed in as",Store.mode==="neon"?(S.role==="marketing"?"marketing — may raise shipments only":"supply — full rights"):"—"),
       row("Shared storage",Store.mode==="live"||Store.mode==="neon"),
       row("Data API (/api/data)",d.api==="connected"?true:(d.api||"not tried"),"warn"),
       row("Claude artifact database",!!d.db,"warn"),
@@ -1100,6 +1103,15 @@ function localBanner(){
         el("button",{class:"btn btn-sm",onclick:retryConnect},"Retry connection"),
         el("button",{class:"btn btn-sm",onclick:()=>go("setup")},"Why?"),
         el("button",{class:"btn btn-sm",onclick:clearLocal},"Clear this browser\u2019s data"))));
+}
+/* The team code is remembered per device, so changing who someone is means
+   forgetting it and asking again. */
+async function signOut(){
+  if(!confirm("Sign out on this device?\n\nYou will need a team code to get back in.")) return;
+  Store.api.setCode("");
+  Store.ready=false;
+  await Store.init();
+  render();
 }
 async function clearLocal(){
   if(!confirm("Remove everything stored in this browser?\n\nThe shared board is not touched.")) return;
@@ -1646,6 +1658,12 @@ function viewSetup(){
             ? "Live — every change is stored and both teams see it within seconds."
             : "Not connected to the shared board. What you see is stored in this browser alone; open the dashboard from claude.ai to reach the real data."),
           Store.mode!=="live"?el("button",{class:"btn btn-sm",style:"margin-top:8px",onclick:clearLocal},"Clear this browser\u2019s data"):null),
+        Store.mode==="neon"?el("div",{},
+          el("div",{style:"font-weight:600;margin-bottom:4px"},"Signed in as"),
+          el("div",{class:"hint"},S.role==="marketing"
+            ? "Marketing. You can raise and edit shipments; supply creates the courier orders."
+            : "Supply. Full rights, including the courier downloads and these settings."),
+          el("button",{class:"btn btn-sm",style:"margin-top:8px",onclick:signOut},"Sign out / use another code")):null,
         el("div",{},el("div",{style:"font-weight:600;margin-bottom:4px"},"AI screening"),
           el("div",{class:"hint"},Sampler
             ? "Available in this view. Each run uses the Claude usage of whoever presses the button."
