@@ -410,8 +410,8 @@ const DEFAULT_SETTINGS = {
   channel:"PR", facility:"", country:"India", orderPrefix:"PR",
   gifting:false, shippingCharge:0, brand:"Aravi Organic",
   shipMethod:"STD", currency:"INR", addressId:"SENSE", orderNextNo:632,
-  selloshipPayment:4, declaredValue:500, fallbackEmail:"",
-  boxDims:{"PR Box":{l:25,b:20,h:12},"Normal Box":{l:20,b:15,h:10}},
+  selloshipPayment:4, declaredValue:500, fallbackEmail:"", shipwayWarehouse:"",
+  boxDims:{"PR Box":{l:25,b:20,h:12,w:600},"Normal Box":{l:20,b:15,h:10,w:350}},
   ucColumns:UC_DEFAULT_COLUMNS, ucVersion:UC_TEMPLATE_VERSION
 };
 
@@ -476,7 +476,12 @@ function collabProblems(c){
 </script>
 <script>
 /* ================= storage layer ================= */
-const S = { influencers:{}, collabs:{}, skus:{}, settings:{...DEFAULT_SETTINGS} };
+const S = { influencers:{}, collabs:{}, skus:{}, settings:{...DEFAULT_SETTINGS}, role:"supply" };
+/* Marketing raises shipments; supply turns them into courier orders. On the
+   Neon deployment the server enforces this from the code that was typed —
+   hiding the buttons here only keeps the two jobs from colliding. */
+const canCreateOrders = ()=>S.role!=="marketing";
+const MARKETING_STAGES = ["Draft","Ready to Ship","On Hold","Cancelled"];
 const Store = {
   db:null, mode:"local", ready:false, diag:{}, poll:null, writing:0,
 
@@ -504,6 +509,7 @@ const Store = {
   writeLocal(c,map){ try{ localStorage.setItem(this.key(c),JSON.stringify(map)); }catch(e){} },
 
   applySnapshot(snap){
+    S.role = snap.role || "supply";
     for(const c of ["influencers","collabs","skus"]) S[c] = snap[c] || {};
     const cfg = (snap.config||{}).settings || {};
     const {id:_drop, ...body} = cfg;
@@ -593,7 +599,7 @@ const Store = {
     }
     this.ready=true;
     setConn(this.mode, {live:"Live · shared with your team",
-                        neon:"Live · shared with your team",
+                        neon:"Live · "+(S.role==="marketing"?"marketing":"supply"),
                         locked:"Locked · team code needed",
                         local:"Not connected · this browser only"}[this.mode]);
   },
@@ -1112,12 +1118,17 @@ function viewShip(){
     el("div",{},el("h1",{},"Ship queue"),
       el("p",{},"Everything marketing added is here. One click gives you the whole batch as a single file — Unicommerce, or Selloship when you are shipping direct. Paste the dispatch export back when it ships.")),
     el("div",{class:"head-actions"},
-      el("button",{class:"btn",onclick:openPasteBack},"Paste dispatch details"),
-      el("button",{class:"btn",onclick:openBulkBuild},"Review first"),
-      el("button",{class:"btn btn-s",onclick:downloadAllReady},
-        "Unicommerce"+(UI.sel.size?" · "+UI.sel.size+" picked":(ready.length?" · "+ready.length:""))),
-      el("button",{class:"btn btn-p",onclick:downloadSelloship},
-        "Selloship"+(UI.sel.size?" · "+UI.sel.size+" picked":(ready.length?" · "+ready.length:""))))));
+      canCreateOrders()?el("button",{class:"btn",onclick:openPasteBack},"Paste dispatch details"):null,
+      canCreateOrders()?el("button",{class:"btn",onclick:openBulkBuild},"Review first"):null,
+      canCreateOrders()?el("button",{class:"btn btn-s",onclick:downloadAllReady},
+        "Unicommerce"+(UI.sel.size?" · "+UI.sel.size:(ready.length?" · "+ready.length:""))):null,
+      canCreateOrders()?el("button",{class:"btn btn-p",onclick:downloadSelloship},
+        "Selloship"+(UI.sel.size?" · "+UI.sel.size:(ready.length?" · "+ready.length:""))):null,
+      canCreateOrders()?el("button",{class:"btn btn-p",onclick:downloadShipway},
+        "Shipway"+(UI.sel.size?" · "+UI.sel.size:(ready.length?" · "+ready.length:""))):null)));
+  if(!canCreateOrders()) wrap.appendChild(el("div",{class:"callout"},
+    el("b",{},"You are signed in as marketing. "),
+    "These are the shipments you have raised and where they have reached. Creating the courier orders is supply\u2019s step."));
 
   const L=collabList().filter(matches).filter(c=>c.shipStatus!=="Cancelled")
     .sort((a,b)=>{const r=SHIP_FLOW.indexOf(a.shipStatus)-SHIP_FLOW.indexOf(b.shipStatus);
@@ -1180,8 +1191,9 @@ function viewShip(){
       el("button",{class:"btn btn-sm",onclick:()=>{UI.sel.clear();render();}},"Clear"),
       el("span",{style:"flex:1"}),
       el("button",{class:"btn btn-sm",onclick:()=>bulkStatus("On Hold")},"Put on hold"),
-      el("button",{class:"btn btn-sm",onclick:downloadSelloship},"Selloship"),
-      el("button",{class:"btn btn-sm btn-s",onclick:downloadAllReady},"Unicommerce")));
+      canCreateOrders()?el("button",{class:"btn btn-sm",onclick:downloadShipway},"Shipway"):null,
+      canCreateOrders()?el("button",{class:"btn btn-sm",onclick:downloadSelloship},"Selloship"):null,
+      canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadAllReady},"Unicommerce"):null));
   }
   return wrap;
 }
@@ -1573,14 +1585,16 @@ function viewSetup(){
   const dim=(box,k)=>((s.boxDims||{})[box]||{})[k]||"";
   const setDim=(box,k,v)=>{ s.boxDims={...(s.boxDims||{})}; s.boxDims[box]={...(s.boxDims[box]||{}),[k]:num(v)}; save(); };
   wrap.appendChild(el("div",{class:"panel",style:"margin-bottom:16px"},
-    el("div",{class:"panel-h"},el("div",{},el("h3",{},"Selloship defaults"),
-      el("div",{class:"sub"},"One row per parcel, so the box size and declared value come from here"))),
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},"Courier file defaults"),
+      el("div",{class:"sub"},"Selloship and Shipway take the box size, weight and declared value from here"))),
     el("div",{class:"panel-b"},
       el("div",{class:"grid2"},
         field("Payment method",select(String(num(s.selloshipPayment)||4),[["4","4 — Prepaid"],["3","3 — COD"]],
           v=>{s.selloshipPayment=num(v);save();})),
         field("Declared value when no MRP (₹)",input(s.declaredValue,v=>{s.declaredValue=num(v);save();},{type:"number",min:"0"}),
           {hint:"Couriers reject a ₹0 parcel. Used only when the SKUs carry no MRP."}),
+        field("Shipway warehouse ID",input(s.shipwayWarehouse,v=>{s.shipwayWarehouse=v.trim();save();},
+          {placeholder:"blank unless Shipway gave you one"})),
         field("Fallback email",input(s.fallbackEmail,v=>{s.fallbackEmail=v.trim();save();},
           {type:"email",placeholder:"leave blank unless Selloship demands one"}),
           {hint:"Used only when a creator gave no email. Fill this if Selloship rejects a blank email.",span:true})),
@@ -1590,7 +1604,9 @@ function viewSetup(){
         el("div",{class:"grid3"},
           field("Length",input(dim(box,"l"),v=>setDim(box,"l",v),{type:"number",min:"0"})),
           field("Breadth",input(dim(box,"b"),v=>setDim(box,"b",v),{type:"number",min:"0"})),
-          field("Height",input(dim(box,"h"),v=>setDim(box,"h",v),{type:"number",min:"0"}))))))));
+          field("Height",input(dim(box,"h"),v=>setDim(box,"h",v),{type:"number",min:"0"})),
+          field("Weight (g)",input(dim(box,"w"),v=>setDim(box,"w",v),{type:"number",min:"0"}),
+            {hint:"Shipway needs a dead weight"})))))));
 
   const cols=s.ucColumns||UC_DEFAULT_COLUMNS;
   const mapBody=el("div",{});
@@ -1816,7 +1832,7 @@ function openCollabDraft(d,id,title,sub,focus){
     const ship=section("What ships, and where","lane-s");
     ship.appendChild(el("div",{class:"grid2"},
       field("Box type",select(d.box,BOXES,v=>{d.box=v;}),{hint:"PR Box goes with the printed sleeve and note card."}),
-      field("Shipment stage",select(d.shipStatus,SHIP_ALL,v=>{d.shipStatus=v;
+      field("Shipment stage",select(d.shipStatus,canCreateOrders()?SHIP_ALL:MARKETING_STAGES,v=>{d.shipStatus=v;
         if(v==="Dispatched"&&!d.dispatchDate)d.dispatchDate=todayISO();
         if(v==="Delivered"&&!d.deliveryDate)d.deliveryDate=todayISO(); build();}))));
     const items=el("div",{style:"margin:12px 0"});
@@ -3242,6 +3258,7 @@ function selloshipCsv(rows){
   return [head,...body].join("\r\n")+"\r\n";
 }
 async function downloadSelloship(){
+  if(!canCreateOrders()){ toast("Only the supply team creates orders",true); return; }
   const chosen=downloadScope();
   const clean=chosen.filter(c=>!collabProblems(c).length);
   if(!clean.length){ openBulkBuild(); return; }
@@ -3272,6 +3289,115 @@ async function downloadSelloship(){
 </script>
 
 <script>
+/* ================= Shipway bulk order file =================
+   One row per item, like Unicommerce, but the parcel's weight and size ride
+   on every row. Order Total Amount is the line total, derived the way their
+   own sample does it: (price - discount) x qty + shipping - order discount. */
+const SHIPWAY_COLUMNS = [
+  {header:"*Order ID",field:"order.code"},
+  {header:"Order Tags",field:"order.tags"},
+  {header:"Warehouse ID",field:"order.warehouse"},
+  {header:"*SKU",field:"item.sku"},
+  {header:"*Product Name",field:"item.name"},
+  {header:"*Product Price(Inclusive of all taxes)",field:"item.price"},
+  {header:"Product Discount",field:"item.discount"},
+  {header:"*Product Quantity",field:"item.qty"},
+  {header:"Order Discount",field:"blank"},
+  {header:"Shipping Amount",field:"blank"},
+  {header:"*Order Total Amount",field:"item.total"},
+  {header:"*Payment Type",field:"order.payType"},
+  {header:"*Order Date",field:"order.dateBr"},
+  {header:"*Order Dead Weight(g)",field:"box.weight"},
+  {header:"*Length(cm)",field:"box.l"},
+  {header:"*Breadth(cm)",field:"box.b"},
+  {header:"*Height(cm)",field:"box.h"},
+  {header:"*Shipping:FirstName",field:"ship.first"},
+  {header:"*Shipping:LastName",field:"ship.last"},
+  {header:"*Shipping:Phone",field:"ship.phone"},
+  {header:"*Shipping:Email",field:"cust.email"},
+  {header:"*Shipping:Address",field:"ship.addr1"},
+  {header:"Shipping:Address2",field:"ship.addr2"},
+  {header:"*Shipping:Pincode",field:"ship.pin"},
+  {header:"*Shipping:City",field:"ship.city"},
+  {header:"*Shipping:State",field:"ship.state"},
+  {header:"*Shipping:Country",field:"ship.country"},
+  {header:"Billing:FirstName",field:"blank"},
+  {header:"Billing:LastName",field:"blank"},
+  {header:"Billing:Phone",field:"blank"},
+  {header:"Billing:Address",field:"blank"},
+  {header:"Billing:Address2",field:"blank"},
+  {header:"Billing:Pincode",field:"blank"},
+  {header:"Billing:City",field:"blank"},
+  {header:"Billing:State",field:"blank"},
+  {header:"Billing:Country",field:"blank"},
+  {header:"Order Confirmation",field:"blank"},
+  {header:"Address Confirmation",field:"blank"}
+];
+
+function shipwayValue(field,ctx){
+  const {c,item,code,st,s,unitPrice} = ctx;
+  const {first,last}=splitName(st.name);
+  const dims=(s.boxDims||{})[c.box]||{};
+  const qty=num(item.qty)||1;
+  const price=num(unitPrice);
+  const map={
+    "order.code":code, "order.tags":c.box||"", "order.warehouse":s.shipwayWarehouse||"",
+    "order.payType":(num(s.selloshipPayment)===3?"C":"P"),
+    "order.dateBr":"["+todayISO()+"]",
+    "item.sku":item.sku, "item.name":item.name||item.sku,
+    "item.price":price, "item.discount":0, "item.qty":qty, "item.total":price*qty,
+    "box.weight":num(dims.w)||"", "box.l":dims.l||"", "box.b":dims.b||"", "box.h":dims.h||"",
+    "ship.first":first, "ship.last":last, "ship.phone":phone10(st.phone),
+    "cust.email":st.email||s.fallbackEmail||"",
+    "ship.addr1":st.addr1||"", "ship.addr2":st.addr2||"",
+    "ship.pin":digits(st.pin), "ship.city":st.city||"", "ship.state":st.state||"",
+    "ship.country":s.country||"India",
+    "blank":""
+  };
+  return map[field] ?? "";
+}
+/* Couriers reject a zero-value parcel, and the SKU master carries no MRP, so
+   the declared value is spread across the units when a price is missing. */
+function shipwayUnitPrice(c,item,s){
+  if(num(item.mrp)) return num(item.mrp);
+  const units=(c.items||[]).reduce((t,i)=>t+(num(i.qty)||1),0)||1;
+  return Math.max(1, Math.round((num(s.declaredValue)||0)/units));
+}
+function buildShipway(collabs){
+  const s=S.settings, cols=SHIPWAY_COLUMNS;
+  const gen=nextOrderCode(); let fresh=0;
+  const rows=[cols.map(c=>csvCell(c.header)).join(",")];
+  const assigned=[];
+  collabs.forEach(c=>{
+    const reused=!!c.ucCode; if(!reused) fresh++;
+    const code=c.ucCode||gen(fresh);
+    assigned.push({collab:c,code,reused});
+    const st=c.ship||{};
+    (c.items||[]).forEach(item=>{
+      const unitPrice=shipwayUnitPrice(c,item,s);
+      rows.push(cols.map(col=>csvCell(shipwayValue(col.field,{c,item,code,st,s,unitPrice}))).join(","));
+    });
+  });
+  return {csv:rows.join("\r\n")+"\r\n", assigned};
+}
+async function downloadShipway(){
+  if(!canCreateOrders()){ toast("Only the supply team creates orders",true); return; }
+  const chosen=downloadScope();
+  const clean=chosen.filter(c=>!collabProblems(c).length);
+  if(!clean.length){ openBulkBuild(); return; }
+  const noEmail=clean.filter(c=>!((c.ship||{}).email||S.settings.fallbackEmail));
+  if(noEmail.length && !confirm(noEmail.length+" order(s) have no email address, and Shipway marks that column mandatory.\n\nSet a fallback email under Setup, or continue anyway?")) return;
+  if(clean.length!==chosen.length &&
+     !confirm((chosen.length-clean.length)+" order(s) have an address or SKU problem and will be left out.\n\nContinue with the "+clean.length+" that are clean?")) return;
+  const {csv,assigned}=buildShipway(clean);
+  if(!await saveFile("shipway-orders-"+todayISO()+".csv",csv)) return;
+  const again=clean.filter(c=>c.ucCode).length;
+  await markCreated(assigned,"Shipway");
+  toast(clean.length+" orders downloaded for Shipway"+(again?" ("+again+" re-downloaded)":""));
+}
+</script>
+
+<script>
 /* ================= bulk build + paste back ================= */
 /* What a download covers: the ticked rows if any are ticked, otherwise the
    whole ready batch. Ticking lets supply pull an earlier batch again. */
@@ -3290,6 +3416,7 @@ async function markCreated(assigned, via){
   UI.sel.clear();
 }
 async function downloadAllReady(){
+  if(!canCreateOrders()){ toast("Only the supply team creates orders",true); return; }
   const chosen=downloadScope();
   const clean=chosen.filter(c=>!collabProblems(c).length);
   if(!String(S.settings.shipMethod||"").trim() || !clean.length || clean.length!==chosen.length){

@@ -22,10 +22,10 @@ retypes an address, a SKU or a tracking number.
 - **New shipment** — marketing's page. Paste the address, add the products either by
   pasting a list or searching the catalogue, save. There is no download here on purpose:
   entries pile up through the day and supply takes them as one file the next morning.
-- **Ship queue** — supply's page. Two one-click downloads of the same ready batch:
-  **Unicommerce** (CSV, one row per item) and **Selloship** (xlsx, one row per parcel).
-  Either saves the file and marks the orders created. *Review first* opens the batch
-  for checking before downloading.
+- **Ship queue** — supply's page. Three one-click downloads of the same ready batch:
+  **Unicommerce** (CSV, per item), **Selloship** (xlsx, per parcel) and **Shipway**
+  (CSV, per item). Each saves the file and marks the orders created. *Review first*
+  opens the batch for checking before downloading.
 - **Collabs** — the register. Locked price, payment state, box contents, shipment stage.
 - **Content** — post date, link, views, reach, likes, comments, shares, saves; ER, CPV and CPE computed.
 - **Influencers** — the master. Address, pincode, mobile, tier, category, full collab history, one-click repeat.
@@ -95,6 +95,48 @@ carry no MRP the fallback value is used.
 The workbook is built in the browser with SheetJS from the CDN; if that script cannot
 load, the same columns are saved as CSV rather than nothing.
 
+## The Shipway file
+
+`templates/shipway-bulk-order-sample.csv` — two orders, three item rows. Built to the
+38 columns of Shipway's own sample import, one row per item like Unicommerce.
+
+Order Total Amount is derived the way their sample does it, verified against every row
+of it: `(price − product discount) × qty + shipping − order discount`.
+
+| Column | Filled with |
+|---|---|
+| `*Order ID` | the same `PR632` code the other two files use |
+| `Order Tags` | the box type |
+| `*Product Price` | the SKU's MRP, or the declared value split across the units |
+| `*Order Total Amount` | price × quantity |
+| `*Payment Type` | `P` prepaid (`C` if the payment method is switched to COD) |
+| `*Order Date` | `[YYYY-MM-DD]`, brackets included, as in their sample |
+| `*Order Dead Weight(g)`, `*Length/Breadth/Height` | the box type's weight and size |
+| `*Shipping:FirstName` / `LastName` | the consignee name split; `.` with no surname |
+| `*Shipping:Email` | the creator's email, else the fallback email |
+
+Weight, dimensions, warehouse ID, declared value and fallback email are all under
+**Setup → Courier file defaults**. Shipway marks the email column mandatory, so the
+download warns before building a file with any blank ones.
+
+## Who may do what
+
+With `MARKETING_CODE` set, the code someone types decides what they can do, and the
+API enforces it rather than the page merely hiding buttons:
+
+| | Marketing | Supply |
+|---|---|---|
+| Add and edit shipments | yes | yes |
+| Move a shipment past *Ready to Ship* | no | yes |
+| Download a courier file | no | yes |
+| Write order codes, AWB, courier, dispatch dates | no | yes |
+| Change Setup | no | yes |
+
+A marketing save that omits an order code or tracking keeps what is already stored
+rather than clearing it, and an order that has already gone to the courier is closed
+to marketing entirely. Leave `MARKETING_CODE` unset and everyone who gets in has
+supply's rights, as before.
+
 ## Running it
 
 `index.html` is the whole application — no build step, no framework. It picks its
@@ -121,7 +163,8 @@ serverless function that holds them instead and checks a shared team code first.
    | Name | Value |
    |---|---|
    | `DATABASE_URL` | the Neon connection string |
-   | `TEAM_CODE` | any phrase your two teams will type once |
+   | `TEAM_CODE` | supply's code — full rights |
+   | `MARKETING_CODE` | optional, marketing's code — may raise shipments only |
 
 3. **Redeploy.** The table is created on the first request, so there is no migration
    to run:
