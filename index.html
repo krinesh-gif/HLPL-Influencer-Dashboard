@@ -430,7 +430,12 @@ const el = (t,a={},...kids)=>{const n=document.createElement(t);
   return n;};
 const esc = s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = p=>p+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-const todayISO = ()=>new Date().toISOString().slice(0,10);
+const localISO = d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const todayISO = ()=>localISO(new Date());
+const nowStamp = ()=>{const d=new Date();
+  return localISO(d)+"T"+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+const hhmm = t=>{const m=/T(\d{2}):(\d{2})/.exec(String(t||""));if(!m)return "";
+  let h=+m[1];const ap=h<12?"am":"pm";h=h%12||12;return h+":"+m[2]+ap;};
 const monthOf = d=>(d||"").slice(0,7);
 const nowMonth = ()=>todayISO().slice(0,7);
 const num = v=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));return isFinite(n)?n:0;};
@@ -713,7 +718,7 @@ function sampleData(){
   ];
   return {skus,people,collabs};
 }
-function addDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function addDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return localISO(d); }
 async function loadSamples(){
   const {skus,people,collabs}=sampleData();
   for(const s of skus) await Store.put("skus",s);
@@ -742,6 +747,13 @@ const outstanding = c=>c.barter?0:Math.max(0,num(c.price)-num(c.paid));
 const isOpen = c=>!["Delivered","Cancelled"].includes(c.shipStatus);
 const shipTAT = c=>daysBetween(c.requestedAt,c.dispatchDate);
 const pendingAge = c=>["Ready to Ship","Order Created"].includes(c.shipStatus)?daysSince(c.requestedAt):null;
+const agoText = d=>{const n=daysSince(d);
+  return n===null?"":n<=0?"today":n===1?"yesterday":n+"d ago";};
+function raisedCell(c){
+  return el("td",{class:"nowrap"},
+    el("div",{class:"mono",style:"font-size:12px"},dmy(c.requestedAt)),
+    el("div",{class:"t-sub mono"},hhmm(c.createdTs)||agoText(c.requestedAt)));
+}
 const orderValue = c=>(c.items||[]).reduce((s,i)=>s+num(i.mrp)*num(i.qty),0);
 
 /* Order codes continue the team's own running series: PR554, PR555, ... */
@@ -1000,6 +1012,7 @@ function viewCollabs(){
     const probs=collabProblems(c);
     tb.appendChild(el("tr",{},
       personCell(c),
+      raisedCell(c),
       el("td",{},el("div",{},c.deliverable||"—"),el("div",{class:"t-sub"},c.platform+" · "+monthLabel(c.month))),
       itemsCell(c),
       el("td",{},statusPill(c), probs.length&&c.shipStatus==="Draft"
@@ -1014,7 +1027,7 @@ function viewCollabs(){
   });
   wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},
     el("table",{},
-      el("thead",{},el("tr",{},...["Influencer","Deliverable","Products / box","Shipment","Locked ₹","Payment","Views","",].map(h=>
+      el("thead",{},el("tr",{},...["Influencer","Raised on","Deliverable","Products / box","Shipment","Locked ₹","Payment","Views","",].map(h=>
         el("th",{class:["Locked ₹","Views"].includes(h)?"num":""},h)))),
       tb))));
   return wrap;
@@ -1177,6 +1190,7 @@ function viewShip(){
         el("div",{class:"mono",style:"font-size:12px"},[(c.ship||{}).city,(c.ship||{}).state].filter(Boolean).join(", ")||"—"),
         el("div",{class:"t-sub mono"},digits((c.ship||{}).pin)||"no pin"),
         probs.length?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},probs[0][1]):null),
+      raisedCell(c),
       el("td",{},statusPill(c),
         age!==null?el("div",{},el("div",{class:"t-sub mono"},age+"d in queue"),
           el("div",{class:"agebar"},el("i",{style:"width:"+Math.min(100,age*14)+"%;background:"+(age>=4?"var(--crit)":age>=2?"var(--warn)":"var(--teal)")}))):null),
@@ -1192,7 +1206,7 @@ function viewShip(){
         onchange:e=>{UI.sel.clear();
           if(e.target.checked) L.filter(c=>c.shipStatus==="Ready to Ship"&&!collabProblems(c).length).forEach(c=>UI.sel.add(c.id));
           render();}})),
-      ...["Influencer","Products / box","Destination","Stage","UC order code","Tracking",""].map(h=>el("th",{},h)))),
+      ...["Influencer","Products / box","Destination","Raised on","Stage","UC order code","Tracking",""].map(h=>el("th",{},h)))),
     tb))));
 
   if(UI.sel.size){
@@ -1266,13 +1280,13 @@ function viewContent(){
 function exportPerformance(){
   const rows=[["Month","Influencer","Handle","Platform","Deliverable","Locked price","Payment status","Paid",
     "Posted on","Link","Views","Reach","Likes","Comments","Shares","Saves","Engagements","ER %","CPV","CPE",
-    "Shipment","UC order","Courier","AWB","Dispatched","Delivered"]];
+    "Raised on","Shipment","UC order","Courier","AWB","Dispatched","Delivered"]];
   collabList().sort((a,b)=>(a.month||"").localeCompare(b.month||"")).forEach(c=>{
     const i=infOf(c)||{};
     rows.push([c.month,(c.ship||{}).name||i.name,"@"+(i.handle||""),c.platform,c.deliverable,num(c.price),c.payStatus,num(c.paid),
       c.postDate,c.postLink,num(c.views),num(c.reach),num(c.likes),num(c.comments),num(c.shares),num(c.saves),
       engagements(c),erOf(c).toFixed(2),cpvOf(c).toFixed(3),cpeOf(c).toFixed(2),
-      c.shipStatus,c.ucCode,c.courier,c.awb,c.dispatchDate,c.deliveryDate]);
+      c.requestedAt,c.shipStatus,c.ucCode,c.courier,c.awb,c.dispatchDate,c.deliveryDate]);
   });
   saveFile("influencer-performance-"+todayISO()+".csv","﻿"+rows.map(r=>r.map(csvCell).join(",")).join("\r\n"));
 }
@@ -1749,7 +1763,8 @@ function blankCollab(){
     price:0,barter:false,payTerms:"100% post-live",payStatus:"Not Due",payDue:"",payDate:"",paid:0,
     shipStatus:"Draft",ucCode:"",courier:"",awb:"",
     requestedAt:todayISO(),dispatchDate:"",deliveryDate:"",postDate:"",postLink:"",
-    views:0,likes:0,comments:0,shares:0,saves:0,reach:0,notes:"",owner:"Marketing",createdAt:todayISO()};
+    views:0,likes:0,comments:0,shares:0,saves:0,reach:0,notes:"",owner:"Marketing",
+    createdAt:todayISO(),createdTs:nowStamp()};
 }
 function shipFromInfluencer(i){
   return {name:i.name||"",phone:i.phone||"",email:i.email||"",addr1:i.addr1||"",addr2:i.addr2||"",
@@ -1770,7 +1785,7 @@ function openCollab(id,focus){
   const d=c?JSON.parse(JSON.stringify(c)):blankCollab();
   if(!d.ship) d.ship={};
   openCollabDraft(d,id,id?((d.ship.name||"Collab")):"Lock an influencer",
-    id?("Raised "+dmy(d.requestedAt)+(d.ucCode?" · "+d.ucCode:"")):"Everything supply needs, captured once",focus);
+    id?("Raised "+dmy(d.requestedAt)+(hhmm(d.createdTs)?" "+hhmm(d.createdTs):"")+(d.ucCode?" · "+d.ucCode:"")):"Everything supply needs, captured once",focus);
 }
 function openCollabDraft(d,id,title,sub,focus){
   let updateMaster=true;
