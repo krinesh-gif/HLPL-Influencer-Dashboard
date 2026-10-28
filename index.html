@@ -859,7 +859,7 @@ function briefText(c){
 </script>
 <script>
 /* ================= UI state + router ================= */
-const UI = { tab:"quick", q:"", month:"", status:"", pay:"", sel:new Set(), anMonth:"" };
+const UI = { tab:"quick", q:"", month:"", status:"", pay:"", raised:"", sel:new Set(), anMonth:"" };
 const TABS = [
   {id:"quick",    label:"New shipment",lane:"lane-s"},
   {id:"collabs",  label:"Collabs",     lane:"lane-m"},
@@ -940,6 +940,14 @@ function itemsCell(c){
 function emptyState(title,body,action){
   return el("div",{class:"empty"},el("h4",{},title),el("p",{},body),action||null);
 }
+const RAISED_WINDOWS = [
+  {v:"today",    label:"Raised today",      keep:n=>n<=0},
+  {v:"yesterday",label:"Raised yesterday",  keep:n=>n===1},
+  {v:"2",        label:"Last 2 days",       keep:n=>n<=2},
+  {v:"4",        label:"Last 4 days",       keep:n=>n<=4},
+];
+const raisedKey = c=>c.createdTs||c.requestedAt||"";
+const byLatestRaised = (a,b)=>raisedKey(b).localeCompare(raisedKey(a));
 function filterBar(opts){
   const bar=el("div",{class:"filters"});
   bar.appendChild(el("input",{class:"search",type:"search",placeholder:opts.placeholder||"Search name, handle, SKU, AWB, order code…",
@@ -955,13 +963,20 @@ function filterBar(opts){
       el("option",{value:""},"All shipment states"),
       ...SHIP_ALL.map(s=>el("option",{value:s,selected:UI.status===s?true:null},s))));
   }
+  if(opts.raised){
+    bar.appendChild(el("select",{title:"Show only what was raised recently",
+      onchange:e=>{UI.raised=e.target.value;UI.sel.clear();render();}},
+      el("option",{value:""},"Raised any time"),
+      ...RAISED_WINDOWS.map(w=>el("option",{value:w.v,selected:UI.raised===w.v?true:null},w.label))));
+  }
   if(opts.pay){
     bar.appendChild(el("select",{onchange:e=>{UI.pay=e.target.value;render();}},
       el("option",{value:""},"All payment states"),
       ...PAY_STATES.map(s=>el("option",{value:s,selected:UI.pay===s?true:null},s))));
   }
-  if(UI.q||UI.month||UI.status||UI.pay)
-    bar.appendChild(el("button",{class:"btn btn-q btn-sm",onclick:()=>{UI.q="";UI.month="";UI.status="";UI.pay="";render();}},"Clear filters"));
+  if(UI.q||UI.month||UI.status||UI.pay||UI.raised)
+    bar.appendChild(el("button",{class:"btn btn-q btn-sm",
+      onclick:()=>{UI.q="";UI.month="";UI.status="";UI.pay="";UI.raised="";UI.sel.clear();render();}},"Clear filters"));
   return bar;
 }
 function matches(c){
@@ -969,6 +984,10 @@ function matches(c){
   if(UI.month && c.month!==UI.month) return false;
   if(UI.status && c.shipStatus!==UI.status) return false;
   if(UI.pay && c.payStatus!==UI.pay) return false;
+  if(UI.raised){
+    const w=RAISED_WINDOWS.find(x=>x.v===UI.raised), n=daysSince(c.requestedAt);
+    if(w && (n===null || !w.keep(n))) return false;
+  }
   if(!UI.q) return true;
   const hay=[st.name,inf.name,inf.handle,st.city,st.state,st.pin,c.ucCode,c.awb,c.courier,c.deliverable,c.notes,
     ...(c.items||[]).map(i=>i.sku+" "+i.name)].join(" ").toLowerCase();
@@ -1138,7 +1157,8 @@ function kpi(k,v,d,cls){ return el("div",{class:"kpi "+(cls||"")},
 /* ================= VIEW: Ship Queue (supply home) ================= */
 function viewShip(){
   const wrap=el("div",{});
-  const ready=collabList().filter(c=>c.shipStatus==="Ready to Ship");
+  const allReady=collabList().filter(c=>c.shipStatus==="Ready to Ship");
+  const ready=allReady.filter(matches);
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Ship queue"),
       el("p",{},"Everything marketing added is here. One click gives you the whole batch as a single file — Unicommerce, or Selloship when you are shipping direct. Paste the dispatch export back when it ships.")),
@@ -1156,13 +1176,12 @@ function viewShip(){
     "These are the shipments you have raised and where they have reached. Creating the courier orders is supply\u2019s step."));
 
   const L=collabList().filter(matches).filter(c=>c.shipStatus!=="Cancelled")
-    .sort((a,b)=>{const r=SHIP_FLOW.indexOf(a.shipStatus)-SHIP_FLOW.indexOf(b.shipStatus);
-      return r||(a.requestedAt||"").localeCompare(b.requestedAt||"");});
-  const blocked=ready.filter(c=>collabProblems(c).length);
+    .sort((a,b)=>(SHIP_FLOW.indexOf(a.shipStatus)-SHIP_FLOW.indexOf(b.shipStatus))||byLatestRaised(a,b));
+  const blocked=allReady.filter(c=>collabProblems(c).length);
   const tats=collabList().map(shipTAT).filter(v=>v!==null&&v>=0);
 
   wrap.appendChild(el("div",{class:"kpis"},
-    kpi("Ready to ship",String(ready.length),blocked.length?blocked.length+" blocked on address":"All address-clean","supply"),
+    kpi("Ready to ship",String(allReady.length),blocked.length?blocked.length+" blocked on address":"All address-clean","supply"),
     kpi("In UC, not dispatched",String(collabList().filter(c=>c.shipStatus==="Order Created").length),"Orders created, awaiting pickup"),
     kpi("In transit",String(collabList().filter(c=>c.shipStatus==="Dispatched").length),"AWB assigned"),
     kpi("Median request→dispatch",tats.length?median(tats)+" d":"—",tats.length+" shipments measured"),
@@ -1172,8 +1191,10 @@ function viewShip(){
     el("b",{},blocked.length+" row"+(blocked.length>1?"s":"")+" cannot go into UC yet — "),
     "pincode, state or mobile is wrong. Open the row and fix it, or send it back to marketing. UC rejects the whole file for one bad state name."));
 
-  wrap.appendChild(filterBar({pay:false}));
-  if(!L.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("Queue is clear","Nothing waiting on supply right now."))); return wrap; }
+  wrap.appendChild(filterBar({pay:false,raised:true}));
+  if(!L.length){ wrap.appendChild(el("div",{class:"panel"},UI.raised||UI.q||UI.month||UI.status
+    ? emptyState("Nothing raised in that window","Widen it with the date filter above, or clear the filters.")
+    : emptyState("Queue is clear","Nothing waiting on supply right now."))); return wrap; }
 
   const tb=el("tbody",{});
   L.forEach(c=>{
@@ -3435,8 +3456,10 @@ async function downloadShipway(){
 /* What a download covers: the ticked rows if any are ticked, otherwise the
    whole ready batch. Ticking lets supply pull an earlier batch again. */
 function downloadScope(){
+  /* No tick marks means "everything on screen" — so the date filter and the
+     search box narrow the file too, and the button count never lies. */
   return UI.sel.size ? [...UI.sel].map(id=>S.collabs[id]).filter(Boolean)
-                     : collabList().filter(c=>c.shipStatus==="Ready to Ship");
+                     : collabList().filter(c=>c.shipStatus==="Ready to Ship").filter(matches);
 }
 /* A re-download keeps the order code it already has and never moves a row
    backwards — only a row still waiting becomes "Order created". */
@@ -3462,9 +3485,7 @@ async function downloadAllReady(){
   toast(clean.length+" orders downloaded"+(again?" ("+again+" re-downloaded)":" and marked as created in UC"));
 }
 function openBulkBuild(){
-  const chosen = UI.sel.size
-    ? [...UI.sel].map(id=>S.collabs[id]).filter(Boolean)
-    : collabList().filter(c=>c.shipStatus==="Ready to Ship");
+  const chosen = downloadScope();
   const clean = chosen.filter(c=>!collabProblems(c).length);
   const blocked = chosen.filter(c=>collabProblems(c).length);
   const api=drawer("Unicommerce bulk file","One row per item · "+(S.settings.ucColumns||[]).length+" columns",()=>{});
