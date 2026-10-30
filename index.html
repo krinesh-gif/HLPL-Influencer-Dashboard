@@ -630,10 +630,21 @@ const Uni = {
           el("table",{},el("thead",{},el("tr",{},el("th",{},"SKU"),el("th",{},"Name in Unicommerce"),
             el("th",{class:"num"},"Was"),el("th",{class:"num"},"Now"))),tb))));
       }
-      if(miss.length) api.body.appendChild(el("div",{class:"callout crit"},
-        el("b",{},miss.length+" SKU"+(miss.length>1?"s":"")+" came back without a price: "),
-        miss.map(x=>x.code+" ("+x.why+")").join("; ")
-        +". Those fall back to the per-unit value in Setup until Unicommerce has an MRP against them."));
+      if(miss.length){
+        /* The same reason for thirty SKUs is one line, not thirty. */
+        const byWhy=new Map();
+        miss.forEach(x=>{ const k=x.why||"no reason given";
+          if(!byWhy.has(k)) byWhy.set(k,[]); byWhy.get(k).push(x.code); });
+        const box=el("div",{class:"callout crit"},
+          el("b",{},miss.length+" SKU"+(miss.length>1?"s":"")+" came back without a price. "),
+          "Those fall back to the per-unit value in Setup until Unicommerce has an MRP against them.");
+        [...byWhy.entries()].forEach(([why,codes])=>{
+          box.appendChild(el("div",{style:"margin-top:8px"},
+            el("div",{},el("b",{},codes.length+" SKU"+(codes.length>1?"s":"")+": "),why),
+            el("div",{class:"t-sub mono",style:"white-space:normal"},codes.join(", "))));
+        });
+        api.body.appendChild(box);
+      }
       if(!up.length&&!miss.length) api.body.appendChild(el("div",{class:"callout"},
         el("b",{},"Every SKU already matches Unicommerce. "),"Nothing to change."));
       api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));

@@ -178,8 +178,14 @@ async function accessToken(sql, base, force) {
 }
 
 /* One retry on 401: a token can be revoked at the Uniware end before it
-   expires, and the whole run should not fail for that. */
-async function uniPost(sql, base, path, payload) {
+   expires, and the whole run should not fail for that.
+
+   dropUnknown is for the read calls only. Tenants differ in which optional
+   fields their request classes declare, and Uniware fails the whole call on
+   one it does not know rather than ignoring it. Retrying without that field
+   is safe when reading; on saleOrder/create it is not, because quietly
+   dropping a field would raise a different order from the one intended. */
+async function uniPostOnce(sql, base, path, payload) {
   for (const force of [false, true]) {
     const token = await accessToken(sql, base, force);
     const r = await jsonCall(base + path, {
@@ -195,15 +201,41 @@ async function uniPost(sql, base, path, payload) {
     return r;
   }
 }
+async function uniPost(sql, base, path, payload, opts) {
+  const dropUnknown = !!(opts && opts.dropUnknown);
+  let body = { ...payload }, r = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    r = await uniPostOnce(sql, base, path, body);
+    if (!dropUnknown) return r;
+    const refused = /Unrecognized field "([^"]+)"/.exec(uniErrors(r) || "");
+    const key = refused && refused[1];
+    if (!key || !(key in body) || Object.keys(body).length <= 1) return r;
+    delete body[key];
+  }
+  return r;
+}
 
+/* Uniware hands back Java parse traces and reference chains that bury the one
+   useful sentence, and they are the same sentence for every SKU in a run. */
+function tidyError(m) {
+  return String(m == null ? "" : m)
+    .replace(/\s*at \[Source:[\s\S]*$/i, "")
+    .replace(/\s*\(through reference chain:[\s\S]*$/i, "")
+    .replace(/\s*\(Class [a-zA-Z0-9_.$]+\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+}
 function uniErrors(r) {
-  if (r.status === 0) return r.text;
+  if (r.status === 0) return tidyError(r.text);
   const b = r.body;
   if (b && Array.isArray(b.errors) && b.errors.length) {
-    return b.errors.map((e) => (e && (e.message || e.description || e.code)) || String(e)).join("; ");
+    return [...new Set(b.errors
+      .map((e) => tidyError((e && (e.message || e.description || e.code)) || e))
+      .filter(Boolean))].join("; ");
   }
-  if (b && b.message) return String(b.message);
-  if (!r.ok) return "Unicommerce replied " + r.status + ". " + String(r.text || "").slice(0, 160);
+  if (b && b.message) return tidyError(b.message);
+  if (!r.ok) return "Unicommerce replied " + r.status + ". " + tidyError(r.text);
   return "";
 }
 
@@ -429,7 +461,7 @@ async function doSync(sql, base) {
       code: c.ucCode,
       facilityCodes: facility ? [facility] : [],
       paymentDetailRequired: false,
-    });
+    }, { dropUnknown: true });
     if (!r.ok || !r.body || !r.body.successful) {
       failed.push({ id: c.id, code: c.ucCode, why: uniErrors(r) });
       continue;
@@ -490,8 +522,11 @@ async function doSkuPrices(sql, base, codes) {
   const updated = [], same = [], missing = [];
   for (const sku of list) {
     const code = String(sku.code).trim();
+    /* Only the mandatory field: Uniware refuses a request object carrying
+       anything its own class does not declare, and the optional fields the
+       docs list are not present in every tenant's build. */
     const r = await uniPost(sql, base, "/services/rest/v1/catalog/itemType/get",
-      { skuCode: code, cartonScanIdentifier: null, kitSku: false });
+      { skuCode: code }, { dropUnknown: true });
     const dto = (r.ok && r.body && r.body.successful) ? r.body.itemTypeDTO : null;
     if (!dto) {
       missing.push({ code, why: uniErrors(r) || "not in the Unicommerce item master" });
