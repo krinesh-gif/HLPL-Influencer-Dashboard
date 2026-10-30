@@ -233,8 +233,12 @@ function describeError(e) {
   if (e == null) return "";
   if (typeof e !== "object") return tidyError(e);
   const out = [];
-  const said = tidyError(e.message || e.description || "");
-  if (said) out.push(said);
+  /* Uniware puts the readable sentence in description and the code's name in
+     message, so preferring one over the other loses the explanation. */
+  const desc = tidyError(e.description || "");
+  const msg = tidyError(e.message || "");
+  if (desc) out.push(desc);
+  if (msg && msg !== desc) out.push(desc ? "(" + msg + ")" : msg);
   const code = String(e.code == null ? "" : e.code).trim();
   if (code && code !== "0") out.push("[" + code + "]");
   if (e.fieldName) out.push("field " + tidyError(e.fieldName));
@@ -301,9 +305,12 @@ function saleOrderPayload(collab, code, settings, skuByCode) {
         sellingPrice,
         discount: lineDiscount,
         totalPrice: linePrice,
-        /* The order says PREPAID, so what is payable must also be paid or
-           Uniware carries it as an unpaid order. */
-        prepaidAmount: linePrice,
+        /* Uniware takes a prepaid amount at the order level or at the item
+           level, never both: "only one of order level/order item level
+           Prepaid Amount can be specified". The order-level total is the one
+           that makes the order read as paid, so this stays zero — which is
+           also what it was on the order that went through. */
+        prepaidAmount: 0,
         shippingCharges: 0,
       });
       discount += lineDiscount;
