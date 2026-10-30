@@ -1083,7 +1083,36 @@ const TABS = [
   {id:"analytics",label:"Analytics",   lane:""},
   {id:"setup",    label:"Setup",       lane:""}
 ];
-function go(tab){ UI.tab=tab; UI.sel.clear(); window.scrollTo({top:0,behavior:"instant"}); render(); }
+/* Which tab you are on lives in the address bar, so a refresh, a bookmark or
+   a link all land where you were instead of back on New shipment. The copy in
+   localStorage covers a reload of the bare URL with no hash on it. */
+const TAB_KEY = "r2d:tab";
+const knownTab = id => TABS.some(t=>t.id===id);
+function hashTab(){ return decodeURIComponent(String(location.hash||"").replace(/^#\/?/,"")).trim(); }
+function startTab(){
+  const h=hashTab();
+  if(knownTab(h)) return h;
+  try{ const saved=localStorage.getItem(TAB_KEY); if(knownTab(saved)) return saved; }catch(e){}
+  return "quick";
+}
+function go(tab){
+  if(!knownTab(tab)) tab="quick";
+  UI.tab=tab; UI.sel.clear();
+  try{ localStorage.setItem(TAB_KEY,tab); }catch(e){}
+  /* Replace rather than push: the back button should leave the board, not
+     walk back through every tab somebody happened to open. */
+  if(hashTab()!==tab){
+    try{ history.replaceState(null,"",location.pathname+location.search+"#"+tab); }
+    catch(e){ location.hash=tab; }
+  }
+  window.scrollTo({top:0,behavior:"instant"});
+  render();
+}
+window.addEventListener("hashchange",()=>{
+  const t=hashTab();
+  if(knownTab(t) && t!==UI.tab){ UI.tab=t; UI.sel.clear();
+    try{ localStorage.setItem(TAB_KEY,t); }catch(e){} render(); }
+});
 
 function render(){
   if(!Store.ready) return;
@@ -4045,6 +4074,12 @@ function normDate(s){
   await Store.init();
   if(window.claude && claude.use)
     claude.use("sample").then(f=>{ Sampler=f; if(Store.ready) render(); }).catch(()=>{});
+  UI.tab=startTab();
+  /* Put it in the address bar straight away, so the URL matches what is on
+     screen even when the tab came from the remembered copy. */
+  if(hashTab()!==UI.tab){
+    try{ history.replaceState(null,"",location.pathname+location.search+"#"+UI.tab); }catch(e){}
+  }
   Uni.tick();
   render();
 })();
