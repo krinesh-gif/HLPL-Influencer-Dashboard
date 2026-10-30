@@ -3793,57 +3793,172 @@ function openBulkBuild(){
   api.foot.appendChild(el("button",{class:"btn btn-q btn-sm",onclick:api.close},"Cancel"));
 }
 
+/* A courier or OMS export pasted back: Shipway, Unicommerce, Selloship. The
+   columns differ between all three, so a header row is read by name, and only
+   a file without one falls back to the old fixed order. */
+function parseDelimited(text){
+  const body=String(text||"").replace(/^﻿/,"");
+  const first=(body.split(/\r?\n/)[0]||"");
+  const sep=(first.split("\t").length-1)>(first.split(",").length-1)?"\t":",";
+  const rows=[]; let row=[], cell="", quoted=false;
+  for(let i=0;i<body.length;i++){
+    const ch=body[i];
+    if(quoted){
+      if(ch==='"'){ if(body[i+1]==='"'){ cell+='"'; i++; } else quoted=false; }
+      else cell+=ch;
+    }
+    else if(ch==='"') quoted=true;
+    else if(ch===sep){ row.push(cell); cell=""; }
+    else if(ch==="\n"){ row.push(cell); rows.push(row); row=[]; cell=""; }
+    else if(ch!=="\r") cell+=ch;
+  }
+  if(cell||row.length){ row.push(cell); rows.push(row); }
+  return rows.map(r=>r.map(x=>x.trim())).filter(r=>r.some(Boolean));
+}
+const PB_COLUMNS=[
+  ["code",        /^\*?\s*(sale\s*)?order\s*(id|code|no\.?|number)?$|^\*?\s*(display\s*)?order\s*code$/i],
+  ["awb",         /awb|waybill|tracking\s*(no|number|id)/i],
+  ["status",      /shipment\s*status|^\*?\s*(order\s*|current\s*|delivery\s*)?status$/i],
+  ["courier",     /courier|carrier|shipping\s*provider|logistic/i],
+  ["dispatchDate",/dispatch|shipped\s*(on|date)|manifest/i],
+  ["deliveryDate",/deliver(y|ed)\s*(on|date|at)/i],
+];
+function pbHeaderMap(cells){
+  const map={};
+  cells.forEach((h,i)=>{
+    const name=String(h||"").replace(/^\*+|\*+$/g,"").trim();
+    if(!name) return;
+    for(const [field,re] of PB_COLUMNS)
+      if(map[field]===undefined && re.test(name)){ map[field]=i; return; }
+  });
+  return map;
+}
+/* Courier words vary by aggregator; anything not listed is left alone rather
+   than guessed at, because a wrong stage is worse than no stage. */
+function pbStage(raw){
+  const v=String(raw||"").toUpperCase().replace(/[^A-Z]+/g," ").trim();
+  if(!v) return "";
+  if(/\bDELIVERED\b/.test(v)) return "Delivered";
+  if(/\bCANCEL/.test(v)) return "Cancelled";
+  if(/\b(IN TRANSIT|INTRANSIT|TRANSIT|SHIPPED|DISPATCHED|OUT FOR DELIVERY|PICKED UP|PICKUP DONE|SHIPMENT PICKED)\b/.test(v))
+    return "Dispatched";
+  if(/\b(PENDING|MANIFESTED|NOT PICKED|READY TO SHIP|LABEL GENERATED)\b/.test(v)) return "Order Created";
+  return "";
+}
 function openPasteBack(){
-  let txt="", parsed=[];
-  const api=drawer("Paste dispatch details back",
-    "Export dispatched orders from UC, paste the rows — order code, AWB, courier, date.",()=>{});
+  let txt="", parsed=[], statusOnly=true, note="";
+  const api=drawer("Paste courier details back",
+    "A Shipway, Unicommerce or Selloship export. Keep the header row — the columns are read by name.",()=>{});
   const preview=el("div",{});
+
   const parse=()=>{
-    parsed=[];
-    txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).forEach(line=>{
-      const sep=line.includes("\t")?"\t":",";
-      const p=line.split(sep).map(x=>x.trim().replace(/^"|"$/g,""));
-      if(!p[0]||/sale\s*order|order\s*code/i.test(p[0])) return;
-      const key=p[0].toLowerCase();
+    parsed=[]; note="";
+    const rows=parseDelimited(txt);
+    if(!rows.length){ draw(); return; }
+    const map=pbHeaderMap(rows[0]);
+    const headed = map.code!==undefined && (map.awb!==undefined || map.status!==undefined);
+    const data = headed ? rows.slice(1) : rows;
+    if(!headed) note="No header row recognised, so columns are read in the old order: "
+      +"order code, AWB, courier, dispatch date.";
+    const seen=new Map();
+    data.forEach(p=>{
+      const at=f=>headed&&map[f]!==undefined?(p[map[f]]||""):"";
+      const code=(headed?at("code"):p[0]||"").trim();
+      if(!code || /sale\s*order|order\s*code|order\s*id/i.test(code)) return;
+      const awb     = headed?at("awb").trim()     : (p[1]||"").trim();
+      const courier = headed?at("courier").trim() : (p[2]||"").trim();
+      const rawStat = headed?at("status").trim()   : "";
+      const dates   = headed ? [at("deliveryDate"),at("dispatchDate")].map(normDate)
+                             : [ "", normDate(p.find(x=>/^\d{2}[\/\-]\d{2}[\/\-]\d{2,4}/.test(x)||/^\d{4}-\d{2}-\d{2}/.test(x))) ];
+      /* One row per item in every one of these exports, so an order repeats. */
+      const key=code.toLowerCase();
+      if(seen.has(key)){
+        const prev=seen.get(key);
+        if(!prev.awb && awb) prev.awb=awb;
+        return;
+      }
       const c=collabList().find(x=>(x.ucCode||"").toLowerCase()===key)
            || collabList().find(x=>(x.awb||"").toLowerCase()===key);
-      const dateRaw=p.find(x=>/^\d{2}[\/\-]\d{2}[\/\-]\d{2,4}/.test(x)||/^\d{4}-\d{2}-\d{2}/.test(x));
-      parsed.push({code:p[0],awb:p[1]||"",courier:p[2]||"",date:normDate(dateRaw),collab:c||null});
+      const row={code,awb,courier,rawStat,stage:pbStage(rawStat),
+        deliveryDate:dates[0],dispatchDate:dates[1],collab:c||null};
+      seen.set(key,row); parsed.push(row);
     });
-    preview.innerHTML="";
-    if(!parsed.length){ preview.appendChild(el("div",{class:"hint"},"Nothing parsed yet.")); return; }
-    const hit=parsed.filter(r=>r.collab).length;
-    preview.appendChild(el("div",{class:"callout"+(hit?"":" crit")},
-      el("b",{},hit+" of "+parsed.length+" rows matched. "),
-      hit<parsed.length?"Unmatched rows are ignored — check the order code column is first.":"Applying will mark them Dispatched."));
-    const tb=el("tbody",{});
-    parsed.forEach(r=>tb.appendChild(el("tr",{},
-      el("td",{class:"mono"},r.code),
-      el("td",{},r.collab?((r.collab.ship||{}).name):pill("no match","crit")),
-      el("td",{class:"mono"},r.awb||"—"),
-      el("td",{},r.courier||"—"),
-      el("td",{class:"mono"},r.date?dmy(r.date):"—"))));
-    preview.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
-      el("thead",{},el("tr",{},el("th",{},"Order code"),el("th",{},"Matched to"),el("th",{},"AWB"),
-        el("th",{},"Courier"),el("th",{},"Dispatched"))),tb))));
+    draw();
   };
-  api.body.appendChild(el("div",{class:"callout"},"Column order expected: ",
-    el("b",{},"sale order code · AWB · courier · dispatch date"),". Extra columns are ignored, so a raw UC export usually pastes straight in."));
-  api.body.appendChild(field("Dispatch rows",el("textarea",{rows:9,
-    placeholder:"PR-2602-004\t1489328891140\tDelhivery\t14/02/2026",
+
+  const draw=()=>{
+    preview.innerHTML="";
+    if(!parsed.length){ preview.appendChild(el("div",{class:"hint"},"Nothing read yet.")); return; }
+    if(note) preview.appendChild(el("div",{class:"callout"},note));
+    const matched=parsed.filter(r=>r.collab);
+    const unknownStage=matched.filter(r=>r.rawStat&&!r.stage);
+    preview.appendChild(el("div",{class:"callout"+(matched.length?"":" crit")},
+      el("b",{},matched.length+" of "+parsed.length+" orders matched this board. "),
+      parsed.length-matched.length
+        ? (parsed.length-matched.length)+" are not collab orders and are ignored — a full courier "
+          +"export carries every channel, and nothing outside this board is read or stored."
+        : ""));
+    if(unknownStage.length) preview.appendChild(el("div",{class:"callout crit"},
+      el("b",{},unknownStage.length+" matched row"+(unknownStage.length>1?"s":"")+" had a status I do not map: "),
+      [...new Set(unknownStage.map(r=>r.rawStat))].join(", ")+
+      ". Those keep the stage they already have — set them by hand."));
+    preview.appendChild(el("label",{class:"f",style:"margin:4px 0 10px"},
+      el("span",{style:"display:flex;gap:8px;align-items:center"},
+        el("input",{type:"checkbox",style:"width:auto",checked:statusOnly?true:null,
+          onchange:e=>{statusOnly=e.target.checked;draw();}}),
+        el("span",{},"Stage only — leave AWB, courier and dates as they are")),
+      el("div",{class:"hint"},statusOnly
+        ? "Nothing but the shipment stage is written."
+        : "The AWB, courier and any dates in the file are written too, where the row has none.")));
+    const tb=el("tbody",{});
+    matched.forEach(r=>{
+      const now=r.collab.shipStatus;
+      const fwd=r.stage && SHIP_FLOW.indexOf(r.stage)>=0 && SHIP_FLOW.indexOf(now)>SHIP_FLOW.indexOf(r.stage);
+      tb.appendChild(el("tr",{},
+        el("td",{class:"mono"},r.code),
+        el("td",{},(r.collab.ship||{}).name||"—"),
+        el("td",{},now),
+        el("td",{},r.stage
+          ? (fwd?el("span",{class:"t-sub"},"stays "+now+" (already further on)"):el("b",{},r.stage))
+          : el("span",{class:"t-sub"},r.rawStat?"unmapped":"no status column")),
+        el("td",{class:"mono"},statusOnly?el("span",{class:"t-sub"},"—"):(r.awb||"—"))));
+    });
+    preview.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
+      el("thead",{},el("tr",{},el("th",{},"Order code"),el("th",{},"Influencer"),
+        el("th",{},"Stage now"),el("th",{},"Becomes"),el("th",{},"AWB"))),tb))));
+  };
+
+  api.body.appendChild(el("div",{class:"callout"},
+    "Paste the file whole, header row and all. A Shipway delivered export, a Unicommerce dispatch "
+    +"export and a Selloship sheet all work — the order code, AWB and status columns are found by name. "
+    +"Rows that match no order on this board are ignored."));
+  api.body.appendChild(field("Paste the export",el("textarea",{rows:9,
+    placeholder:'"*Order ID",AWB,"Shipment Status",*SKU,…\nPR700,31738417627152,DELIVERED,…',
     oninput:e=>{txt=e.target.value;parse();}})));
   api.body.appendChild(preview); parse();
+
   api.foot.appendChild(el("button",{class:"btn btn-s",onclick:async()=>{
     const rows=parsed.filter(r=>r.collab);
-    if(!rows.length){toast("No rows matched an order code",true);return;}
+    if(!rows.length){ toast("No order code in that file matches this board",true); return; }
+    let changed=0;
     for(const r of rows){
       const c=S.collabs[r.collab.id]; if(!c) continue;
-      await Store.put("collabs",{...c,awb:r.awb||c.awb,courier:r.courier||c.courier,
-        dispatchDate:r.date||c.dispatchDate||todayISO(),
-        shipStatus:c.shipStatus==="Delivered"?"Delivered":"Dispatched"});
+      const patch={...c};
+      /* Only ever forwards: a row already Delivered is not pulled back. */
+      if(r.stage && SHIP_FLOW.indexOf(r.stage)>SHIP_FLOW.indexOf(c.shipStatus)) patch.shipStatus=r.stage;
+      else if(r.stage && SHIP_FLOW.indexOf(c.shipStatus)<0) patch.shipStatus=r.stage;
+      if(!statusOnly){
+        if(r.awb && !c.awb) patch.awb=r.awb;
+        if(r.courier && !c.courier) patch.courier=r.courier;
+        if(r.dispatchDate && !c.dispatchDate) patch.dispatchDate=r.dispatchDate;
+        if(r.deliveryDate && !c.deliveryDate) patch.deliveryDate=r.deliveryDate;
+      }
+      if(JSON.stringify(patch)===JSON.stringify(c)) continue;
+      await Store.put("collabs",patch); changed++;
     }
-    api.close(); toast(rows.length+" shipments updated");
-  }},"Apply to "+"matched rows"));
+    api.close();
+    toast(changed?changed+" order"+(changed===1?"":"s")+" updated":"Nothing needed changing");
+  }},"Apply"));
   api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Cancel"));
 }
 function normDate(s){
