@@ -64,10 +64,12 @@ function tenantBase() {
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, "");
   /* A whole hostname is as likely to be pasted in as the tenant name alone,
-     so "aravi.unicommerce.com" must not become
-     "aravi.unicommerce.com.unicommerce.com". */
+     so "hivefylifestyle.unicommerce.co.in" must not get the domain added
+     again. This is also the only way to reach a tenant on a domain other
+     than the default below. */
   if (raw.includes(".")) return "https://" + raw;
-  return "https://" + raw + ".unicommerce.com";
+  /* Indian tenants are served from unicommerce.co.in, not .com. */
+  return "https://" + raw + ".unicommerce.co.in";
 }
 
 function missingConfig() {

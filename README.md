@@ -197,7 +197,7 @@ so the collab team never has to ask where a box is.
 
 | Name | Value |
 |---|---|
-| `UNI_TENANT` | the subdomain only, e.g. `aravi` for `aravi.unicommerce.com` |
+| `UNI_TENANT` | the host your team signs in to, e.g. `hivefylifestyle.unicommerce.co.in`. A bare name gets `.unicommerce.co.in` added, so Indian tenants can give just `hivefylifestyle`; a tenant on another domain must be given in full |
 | `UNI_USERNAME` | a Uniware user with **Admin** rights on the facility |
 | `UNI_PASSWORD` | that user's password |
 | `UNI_FACILITY` | the facility code the PR boxes ship from |
