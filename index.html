@@ -609,6 +609,40 @@ const Uni = {
     api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
   },
 
+  /* MRP comes from Uniware's item master and nowhere else. */
+  async mrp(){
+    if(this.busy) return;
+    this.busy=true; render(); toast("Reading MRP from the Unicommerce item master\u2026");
+    try{
+      const out=await this.call({op:"mrp"});
+      await this.refresh();
+      const up=out.updated||[], miss=out.missing||[];
+      const api=drawer("MRP from Unicommerce",
+        up.length+" changed · "+out.same+" already right · "+miss.length+" without a price",()=>{});
+      if(up.length){
+        const tb=el("tbody",{});
+        up.forEach(x=>tb.appendChild(el("tr",{},
+          el("td",{class:"mono"},x.code),
+          el("td",{},x.name||"—"),
+          el("td",{class:"num mono"},x.from?inr(x.from):"—"),
+          el("td",{class:"num mono"},el("b",{},inr(x.to))))));
+        api.body.appendChild(el("div",{class:"panel",style:"margin-bottom:10px"},el("div",{class:"tw"},
+          el("table",{},el("thead",{},el("tr",{},el("th",{},"SKU"),el("th",{},"Name in Unicommerce"),
+            el("th",{class:"num"},"Was"),el("th",{class:"num"},"Now"))),tb))));
+      }
+      if(miss.length) api.body.appendChild(el("div",{class:"callout crit"},
+        el("b",{},miss.length+" SKU"+(miss.length>1?"s":"")+" came back without a price: "),
+        miss.map(x=>x.code+" ("+x.why+")").join("; ")
+        +". Those fall back to the per-unit value in Setup until Unicommerce has an MRP against them."));
+      if(!up.length&&!miss.length) api.body.appendChild(el("div",{class:"callout"},
+        el("b",{},"Every SKU already matches Unicommerce. "),"Nothing to change."));
+      api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
+      toast(up.length?up.length+" price"+(up.length===1?"":"s")+" updated from Unicommerce"
+                     :"Prices already match Unicommerce");
+    }catch(e){ toast(e.message,true); }
+    finally{ this.busy=false; render(); }
+  },
+
   async ping(){
     try{
       const out=await this.call({op:"ping"});
@@ -1565,6 +1599,9 @@ function viewProducts(){
     el("div",{},el("h1",{},"Product master"),
       el("p",{},"The SKU codes exactly as they sit in Unicommerce. Marketing picks from this list, so no bulk upload ever fails on a typed SKU.")),
     el("div",{class:"head-actions"},
+      (Uni.available()&&canCreateOrders())?el("button",{class:"btn",disabled:Uni.busy?true:null,
+        title:"Read each SKU\u2019s MRP off the Unicommerce item master",
+        onclick:()=>Uni.mrp()},Uni.busy?"Working\u2026":"Get MRP from Unicommerce"):null,
       el("button",{class:"btn",onclick:openSkuImport},"Paste SKU list"),
       el("button",{class:"btn btn-p",onclick:()=>openSku(null)},"+ Add SKU"))));
 
@@ -1830,6 +1867,7 @@ function uniPanel(save){
 
     body.appendChild(el("div",{class:"head-actions",style:"margin-top:12px"},
       el("button",{class:"btn",onclick:()=>Uni.ping()},"Test connection"),
+      el("button",{class:"btn",disabled:Uni.busy?true:null,onclick:()=>Uni.mrp()},"Get MRP from Unicommerce"),
       el("button",{class:"btn",onclick:()=>Uni.preview()},"Show what would be sent"),
       el("button",{class:"btn",disabled:Uni.busy?true:null,onclick:()=>Uni.sync(true)},"Sync tracking now")));
   }

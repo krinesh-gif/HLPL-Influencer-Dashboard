@@ -212,8 +212,15 @@ and the access token is cached in a `secret` row that `api/data.js` does not ser
 | Step | Endpoint | Result |
 |---|---|---|
 | Create | `POST /services/rest/v1/oms/saleOrder/create` | the order appears in the PR channel, and `ucCode` is written back |
+| MRP | `POST /services/rest/v1/catalog/itemType/get` | `maxRetailPrice` is written onto each SKU, so the order is raised at the price Uniware itself holds |
 | Read back | `POST /services/rest/v1/oms/saleorder/get` | `trackingNumber` → AWB, `shippingProvider` → courier, `dispatched` / `delivered` → the dates and the stage |
 | Log in | `GET /oauth/token` | cached for its full life, refetched once on a 401 |
+
+**Get MRP from Unicommerce** sits on the Product master and in Setup. It reads
+`maxRetailPrice` off the item master for every SKU on the board and writes nothing
+else. A SKU with no MRP in Uniware, or none at all, is named in the result and falls
+back to the per-unit value in Setup. Without a price the sale order is raised at
+Rs 0.00, which Uniware accepts and then cannot invoice.
 
 Two switches live in Setup → Unicommerce live link:
 

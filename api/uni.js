@@ -7,6 +7,8 @@
  *           so nobody downloads a CSV and uploads it again.
  *   sync  — read the tracking number and courier back off those orders, so
  *           the collab team stops asking supply where the box is.
+ *   mrp   — read each SKU's MRP off the Uniware item master, so the sale
+ *           order is raised at the same price Uniware itself holds.
  *
  * The page is static and shared by two teams, so the Uniware login never
  * goes near the browser. It lives only in this function's environment.
@@ -33,6 +35,7 @@ import { neon } from "@neondatabase/serverless";
 const TOKEN_ROW = { collection: "secret", id: "uniToken" };
 const STATE_ROW = { collection: "secret", id: "uniState" };
 const SYNC_BATCH = 40;          // sale orders read per sync run
+const SKU_BATCH  = 150;         // item-master lookups per run
 const PUSH_BATCH = 25;          // orders created per push run
 const CALL_TIMEOUT = 20000;
 
@@ -469,6 +472,45 @@ async function doSync(sql, base) {
   return { ok: true, ...state, updated, failed, waiting: unchanged.length };
 }
 
+/* -------------------------------------------------- MRP from the item master */
+
+/* The sale order is raised at the SKU's MRP, and Uniware's own item master is
+   the only place that number should come from: anything typed here would drift
+   from it. Reads catalog/itemType/get per SKU and writes maxRetailPrice back.
+   Nothing else on the SKU is touched. */
+async function doSkuPrices(sql, base, codes) {
+  const rows = await sql`SELECT id, data FROM docs WHERE collection = 'skus'`;
+  let list = rows.map(r => ({ id: r.id, ...r.data })).filter(s => String(s.code || "").trim());
+  if (Array.isArray(codes) && codes.length) {
+    const want = new Set(codes.map(c => String(c).trim().toUpperCase()));
+    list = list.filter(s => want.has(String(s.code).trim().toUpperCase()));
+  }
+  list = list.slice(0, SKU_BATCH);
+
+  const updated = [], same = [], missing = [];
+  for (const sku of list) {
+    const code = String(sku.code).trim();
+    const r = await uniPost(sql, base, "/services/rest/v1/catalog/itemType/get",
+      { skuCode: code, cartonScanIdentifier: null, kitSku: false });
+    const dto = (r.ok && r.body && r.body.successful) ? r.body.itemTypeDTO : null;
+    if (!dto) {
+      missing.push({ code, why: uniErrors(r) || "not in the Unicommerce item master" });
+      continue;
+    }
+    const mrp = num(dto.maxRetailPrice);
+    if (!mrp) {
+      missing.push({ code, why: "no MRP set against it in Unicommerce", name: dto.name || "" });
+      continue;
+    }
+    if (mrp === num(sku.mrp)) { same.push(code); continue; }
+    await sql`
+      UPDATE docs SET data = data || ${JSON.stringify({ mrp })}::jsonb, updated_at = now()
+      WHERE collection = 'skus' AND id = ${sku.id}`;
+    updated.push({ code, from: num(sku.mrp), to: mrp, name: dto.name || sku.name || "" });
+  }
+  return { ok: true, looked: list.length, updated, same: same.length, missing };
+}
+
 /* ------------------------------------------------------------------- ping */
 
 async function doPing(sql, base) {
@@ -520,7 +562,7 @@ export default async function handler(req, res) {
     return bad(res, 503, "Unicommerce is not set up on this deployment yet. Missing: " + gaps.join(", ") + ".");
 
   /* Creating an order is supply's step, exactly as it is on the board. */
-  if ((op === "push" || op === "preview" || op === "ping") && role === "marketing")
+  if ((op === "push" || op === "preview" || op === "ping" || op === "mrp") && role === "marketing")
     return bad(res, 403, "Only the supply team creates orders in Unicommerce.");
 
   const base = tenantBase();
@@ -531,6 +573,7 @@ export default async function handler(req, res) {
     if (op === "preview") return res.status(200).json(await doPush(sql, base, body.ids, { dryRun: true }));
     if (op === "push") return res.status(200).json(await doPush(sql, base, body.ids, { dryRun: false }));
     if (op === "sync") return res.status(200).json(await doSync(sql, base));
+    if (op === "mrp") return res.status(200).json(await doSkuPrices(sql, base, body.codes));
     if (op === "autorun") {
       /* What the scheduler runs: create whatever is waiting if the board is
          set to auto, then read tracking back either way. */
