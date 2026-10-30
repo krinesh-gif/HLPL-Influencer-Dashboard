@@ -411,6 +411,7 @@ const DEFAULT_SETTINGS = {
   gifting:false, shippingCharge:0, brand:"Aravi Organic",
   shipMethod:"STD", currency:"INR", addressId:"SENSE", orderNextNo:632,
   selloshipPayment:4, declaredValue:500, fallbackEmail:"", shipwayWarehouse:"",
+  uniAutoPush:false, uniAutoSync:true,
   boxDims:{"PR Box":{l:25,b:20,h:12,w:600},"Normal Box":{l:20,b:15,h:10,w:350}},
   ucColumns:UC_DEFAULT_COLUMNS, ucVersion:UC_TEMPLATE_VERSION
 };
@@ -482,6 +483,111 @@ function collabProblems(c){
 <script>
 /* ================= storage layer ================= */
 const S = { influencers:{}, collabs:{}, skus:{}, settings:{...DEFAULT_SETTINGS}, role:"supply" };
+/* ================= Unicommerce bridge =================
+   The credentials live only in /api/uni on the server. This half just asks it
+   to do things and reports back what it said. */
+const Uni = {
+  busy:false, lastSync:0, lastResult:null, timer:null,
+
+  /* Only the Neon deployment has the function behind it; the artifact preview
+     has no /api at all, so the buttons stay hidden there. */
+  available(){ return Store.mode==="neon"; },
+
+  async call(payload){
+    let r;
+    try{
+      r = await fetch("/api/uni",{method:"POST",
+        headers:{"content-type":"application/json","x-team-code":Store.api.code()},
+        body:JSON.stringify(payload)});
+    }catch(e){ throw new Error("Could not reach the dashboard server."); }
+    let body=null; try{ body=await r.json(); }catch(e){}
+    if(!r.ok) throw new Error((body&&body.error)||("The server replied "+r.status+"."));
+    return body||{};
+  },
+
+  async refresh(){
+    const snap=await Store.api.call({op:"snapshot"});
+    if(snap&&snap.ok){ Store.applySnapshot(snap); render(); }
+  },
+
+  /* Reading tracking back is a pull, so anyone on the board may trigger it —
+     that is the point: the collab team stops asking supply. */
+  async sync(loud){
+    if(this.busy||!this.available()) return;
+    this.busy=true; this.lastSync=Date.now();
+    if(loud) toast("Asking Unicommerce for tracking\u2026");
+    try{
+      const out=await this.call({op:"sync"});
+      this.lastResult={at:new Date().toISOString(),...out};
+      await this.refresh();
+      if(loud) toast(out.updated&&out.updated.length
+        ? out.updated.length+" row"+(out.updated.length>1?"s":"")+" updated from Unicommerce"
+        : "Nothing new \u2014 "+(out.looked||0)+" order"+(out.looked===1?"":"s")+" still with the courier");
+    }catch(e){
+      this.lastResult={at:new Date().toISOString(),error:e.message};
+      if(loud) toast(e.message,true);
+    }finally{ this.busy=false; render(); }
+  },
+
+  /* Creating orders is supply's step, here and on the server. */
+  async push(ids){
+    if(this.busy) return;
+    const n=ids?ids.length:0;
+    if(!confirm("Create "+(n?n+" order":"every clean Ready-to-Ship row")+" in Unicommerce now?\n\n"
+      +"This is the real thing \u2014 the orders appear in the "+(S.settings.channel||"PR")+" channel straight away.")) return;
+    this.busy=true; render(); toast("Sending to Unicommerce\u2026");
+    try{
+      const out=await this.call({op:"push",ids:ids||null});
+      this.lastResult={at:new Date().toISOString(),...out};
+      await this.refresh();
+      const made=(out.created||[]).length, bad=(out.failed||[]).length;
+      toast(made+" order"+(made===1?"":"s")+" created"
+        +(bad?", "+bad+" refused \u2014 see the red note on the row":"")
+        +(out.more?". "+out.more+" left for the next run":""), !!bad);
+    }catch(e){ toast(e.message,true); }
+    finally{ this.busy=false; render(); }
+  },
+
+  /* A dry run: shows the exact JSON the first order would send. */
+  async preview(){
+    try{
+      const out=await this.call({op:"preview"});
+      const api=drawer("What would go to Unicommerce",
+        out.wouldSend+" order"+(out.wouldSend===1?"":"s")+" ready"
+        +(out.more?" (first "+out.wouldSend+" of "+(out.wouldSend+out.more)+")":""),()=>{});
+      if(out.skipped&&out.skipped.length) api.body.appendChild(el("div",{class:"callout crit"},
+        el("b",{},out.skipped.length+" row"+(out.skipped.length>1?"s":"")+" held back: "),
+        out.skipped.map(x=>(x.name||"?")+" \u2014 "+x.why).join("; ")));
+      api.body.appendChild(el("div",{class:"callout"},
+        el("b",{},"Nothing has been sent. "),
+        "This is the payload for the first order. Check the channel, the address and the SKU codes, then use \u201cCreate in Unicommerce\u201d."));
+      api.body.appendChild(el("textarea",{rows:22,readonly:true,class:"mono",
+        style:"width:100%;font-size:11.5px"},JSON.stringify(out.sample,null,2)));
+      api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
+    }catch(e){ toast(e.message,true); }
+  },
+
+  async ping(){
+    try{
+      const out=await this.call({op:"ping"});
+      this.lastResult={at:new Date().toISOString(),ping:out};
+      toast("Connected to "+out.tenant+(out.facility?" \u00b7 facility "+out.facility:""));
+    }catch(e){ this.lastResult={at:new Date().toISOString(),error:e.message}; toast(e.message,true); }
+    render();
+  },
+
+  /* While someone has the Ship queue open, keep tracking current without
+     anybody pressing anything. Throttled, and off if Setup says so. */
+  tick(){
+    clearInterval(this.timer);
+    if(!this.available()||!S.settings.uniAutoSync) return;
+    const due=()=>{ if(document.hidden||UI.tab!=="ship") return;
+      if(Date.now()-this.lastSync>5*60*1000) this.sync(false); };
+    this.timer=setInterval(due,60*1000);
+    setTimeout(due,1500);
+  }
+};
+
 /* Marketing raises shipments; supply turns them into courier orders. On the
    Neon deployment the server enforces this from the code that was typed —
    hiding the buttons here only keeps the two jobs from colliding. */
@@ -1159,10 +1265,20 @@ function viewShip(){
   const wrap=el("div",{});
   const allReady=collabList().filter(c=>c.shipStatus==="Ready to Ship");
   const ready=allReady.filter(matches);
+  const cleanReady=ready.filter(c=>!collabProblems(c).length);
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Ship queue"),
       el("p",{},"Everything marketing added is here. One click gives you the whole batch as a single file — Unicommerce, or Selloship when you are shipping direct. Paste the dispatch export back when it ships.")),
     el("div",{class:"head-actions"},
+      Uni.available()?el("button",{class:"btn",disabled:Uni.busy?true:null,
+        title:"Read the tracking number and courier back off Unicommerce",
+        onclick:()=>Uni.sync(true)},Uni.busy?"Working…":"Sync tracking"):null,
+      (Uni.available()&&canCreateOrders())?el("button",{class:"btn btn-p",disabled:Uni.busy?true:null,
+        title:"Create these as sale orders in Unicommerce — no file, no upload",
+        onclick:()=>Uni.push(UI.sel.size?[...UI.sel]:null)},
+        /* Only the address-clean rows, because those are the ones that will go. */
+        "Create in Unicommerce"+(UI.sel.size?" · "+UI.sel.size
+          :(cleanReady.length?" · "+cleanReady.length:""))):null,
       canCreateOrders()?el("button",{class:"btn",onclick:openPasteBack},"Paste dispatch details"):null,
       canCreateOrders()?el("button",{class:"btn",onclick:openBulkBuild},"Review first"):null,
       canCreateOrders()?el("button",{class:"btn btn-s",onclick:downloadAllReady},
@@ -1215,8 +1331,13 @@ function viewShip(){
       el("td",{},statusPill(c),
         age!==null?el("div",{},el("div",{class:"t-sub mono"},age+"d in queue"),
           el("div",{class:"agebar"},el("i",{style:"width:"+Math.min(100,age*14)+"%;background:"+(age>=4?"var(--crit)":age>=2?"var(--warn)":"var(--teal)")}))):null),
-      el("td",{class:"mono"},c.ucCode||"—"),
-      el("td",{class:"mono"},c.awb?el("div",{},c.awb):"—",c.courier?el("div",{class:"t-sub"},c.courier):null),
+      el("td",{class:"mono"},c.ucCode||"—",
+        c.orderVia==="Unicommerce API"?el("div",{class:"t-sub"},"via API"):null,
+        c.uniError?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600;white-space:normal;max-width:220px"},
+          c.uniError):null),
+      el("td",{class:"mono"},
+        c.awb?(c.trackLink?el("a",{href:c.trackLink,target:"_blank",rel:"noopener"},c.awb):el("div",{},c.awb)):"—",
+        c.courier?el("div",{class:"t-sub"},c.courier):null),
       el("td",{class:"nowrap"},
         el("button",{class:"btn btn-sm btn-q",title:"Copy the handoff note",onclick:()=>copyText(briefText(c))},"Copy brief"),
         el("button",{class:"btn btn-sm btn-q",onclick:()=>openCollab(c.id)},"Open"))));
@@ -1599,6 +1720,55 @@ function select(val,options,on,attrs={}){
 }
 function section(title,lane,...kids){ return el("div",{class:"fs "+(lane||"")},el("h4",{},title),...kids); }
 
+/* The live Unicommerce link: what it is doing, and the switches for it. */
+function uniPanel(save){
+  const ok=Uni.available(), last=Uni.lastResult, sync=last&&last.ping?last.ping.lastSync:null;
+  const body=el("div",{class:"panel-b"});
+
+  if(!ok){
+    body.appendChild(el("div",{class:"callout"},
+      el("b",{},"Not available on this copy of the board. "),
+      "The live link needs the deployment at collab.hivefylifestyle.com, where /api/uni runs. "
+      +"In this preview the Unicommerce, Selloship and Shipway files are the way out."));
+  } else {
+    body.appendChild(el("div",{class:"callout"},
+      el("b",{},"Orders go straight into Unicommerce. "),
+      "No file, no upload. Supply presses “Create in Unicommerce” on the Ship queue, and the "
+      +"tracking number and courier come back on their own. The Uniware login lives only on the server "
+      +"— it is not in this page and nobody on the board can read it."));
+
+    if(last&&last.error) body.appendChild(el("div",{class:"callout crit"},
+      el("b",{},"Last attempt failed: "),last.error));
+    if(last&&last.ping) body.appendChild(el("div",{class:"callout"},
+      el("b",{},"Connected. "),"Tenant ",el("b",{},last.ping.tenant),
+      last.ping.facility?el("span",{},", facility ",el("b",{},last.ping.facility)):null,"."));
+    if(sync) body.appendChild(el("div",{class:"t-sub",style:"margin-bottom:10px"},
+      "Last tracking sync "+dmy(sync.at)+" "+hhmm(String(sync.at).slice(0,16))
+      +" — looked at "+sync.looked+", updated "+sync.updated
+      +(sync.failed?", "+sync.failed+" failed":"")));
+
+    body.appendChild(el("div",{class:"fg"},
+      field("Create orders automatically",
+        select(S.settings.uniAutoPush?"1":"0",[["0","No — supply presses the button"],["1","Yes — on the scheduled run"]],
+          v=>{S.settings.uniAutoPush=v==="1";save();render();}),
+        {hint:"Off is the safer default and matches the rule that only supply creates orders. On, the scheduled run creates every address-clean Ready-to-Ship row by itself."}),
+      field("Keep tracking up to date",
+        select(S.settings.uniAutoSync?"1":"0",[["1","Yes — while the Ship queue is open"],["0","No — only when asked"]],
+          v=>{S.settings.uniAutoSync=v==="1";save();Uni.tick();render();}),
+        {hint:"Reads the AWB back every few minutes so the collab team never has to ask where a box is."})));
+
+    body.appendChild(el("div",{class:"head-actions",style:"margin-top:12px"},
+      el("button",{class:"btn",onclick:()=>Uni.ping()},"Test connection"),
+      el("button",{class:"btn",onclick:()=>Uni.preview()},"Show what would be sent"),
+      el("button",{class:"btn",disabled:Uni.busy?true:null,onclick:()=>Uni.sync(true)},"Sync tracking now")));
+  }
+
+  return el("div",{class:"panel",style:"margin-bottom:16px"},
+    el("div",{class:"panel-h"},el("div",{},el("h3",{},"Unicommerce live link"),
+      el("p",{},"Set the four UNI_ variables in Vercel, then test the connection here."))),
+    body);
+}
+
 /* ================= VIEW: Setup ================= */
 function viewSetup(){
   const s=S.settings, wrap=el("div",{});
@@ -1674,6 +1844,7 @@ function viewSetup(){
       el("button",{class:"btn btn-sm btn-p",onclick:()=>{s.ucColumns=cols;Store.saveSettings();toast("Column mapping saved");}},"Save mapping")));
   };
   drawMap();
+  wrap.appendChild(uniPanel(save));
   wrap.appendChild(el("div",{class:"panel",style:"margin-bottom:16px"},
     el("div",{class:"panel-h"},el("div",{},el("h3",{},"Unicommerce column mapping"),
       el("div",{class:"sub"},cols.length+" columns · one row per item, orders with two SKUs write two rows sharing the order code")),
@@ -3616,6 +3787,7 @@ function normDate(s){
   await Store.init();
   if(window.claude && claude.use)
     claude.use("sample").then(f=>{ Sampler=f; if(Store.ready) render(); }).catch(()=>{});
+  Uni.tick();
   render();
 })();
 </script>

@@ -189,6 +189,58 @@ than instant, which is what this workflow needs.
 
 **Without `TEAM_CODE` set, the API is open to anyone with the URL.** Set it.
 
+## The Unicommerce live link
+
+With four more variables set, supply stops downloading a file at all. `api/uni.js`
+creates the sale orders over Uniware's REST API and reads the tracking number back,
+so the collab team never has to ask where a box is.
+
+| Name | Value |
+|---|---|
+| `UNI_TENANT` | the subdomain only, e.g. `aravi` for `aravi.unicommerce.com` |
+| `UNI_USERNAME` | a Uniware user with **Admin** rights on the facility |
+| `UNI_PASSWORD` | that user's password |
+| `UNI_FACILITY` | the facility code the PR boxes ship from |
+| `CRON_SECRET` | needed only for the scheduled run; Vercel sends it automatically |
+
+Leave any of the first four unset and the link simply does not appear — the files
+keep working. The login never reaches the browser: it is read inside the function,
+and the access token is cached in a `secret` row that `api/data.js` does not serve.
+
+**What it does**
+
+| Step | Endpoint | Result |
+|---|---|---|
+| Create | `POST /services/rest/v1/oms/saleOrder/create` | the order appears in the PR channel, and `ucCode` is written back |
+| Read back | `POST /services/rest/v1/oms/saleorder/get` | `trackingNumber` → AWB, `shippingProvider` → courier, `dispatched` / `delivered` → the dates and the stage |
+| Log in | `GET /oauth/token` | cached for its full life, refetched once on a 401 |
+
+Two switches live in Setup → Unicommerce live link:
+
+- **Create orders automatically** — off by default, which keeps the rule that only
+  supply creates orders. On, the scheduled run creates every address-clean
+  Ready-to-Ship row by itself.
+- **Keep tracking up to date** — on by default. While anyone has the Ship queue
+  open, the AWB is re-read every few minutes.
+
+`vercel.json` schedules `/api/uni?op=autorun` once a day at 08:40 IST. On a Hobby
+plan that daily slot is the most Vercel allows; on Pro, change the schedule to
+`*/30 * * * *` for a half-hourly run.
+
+**Before the first live push**, use **Show what would be sent** in Setup. It builds
+the real payload and sends nothing, so the channel, the address and the SKU codes can
+be checked against a Uniware order that is known to work. Orders go out one at a
+time, so a row Uniware refuses is reported on that row and the rest still go —
+unlike a CSV, where one bad state name rejects the whole file.
+
+Three details worth knowing:
+
+- `thirdPartyShipping` is sent as `false` so Uniware allocates the courier and
+  generates the AWB. With `true` there would be no tracking number to read back.
+- The API has no quantity field, so a quantity of 2 becomes two sale-order items.
+- If a number in the `PR…` series is already taken in Uniware — likely, after years
+  of manual uploads — the push steps to the next free one rather than failing.
+
 ### What the Neon deployment does not have
 
 AI creator screening and the one-click file save are granted by the Claude viewer, so
