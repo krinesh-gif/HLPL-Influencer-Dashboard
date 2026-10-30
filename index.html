@@ -540,10 +540,14 @@ const Uni = {
       const out=await this.call({op:"push",ids:ids||null});
       this.lastResult={at:new Date().toISOString(),...out};
       await this.refresh();
-      const made=(out.created||[]).length, bad=(out.failed||[]).length;
+      const made=(out.created||[]).length, bad=(out.failed||[]).length,
+            held=(out.skipped||[]).length;
       toast(made+" order"+(made===1?"":"s")+" created"
-        +(bad?", "+bad+" refused \u2014 see the red note on the row":"")
-        +(out.more?". "+out.more+" left for the next run":""), !!bad);
+        +(bad?", "+bad+" refused":"")+(held?", "+held+" held back":"")
+        +(out.more?". "+out.more+" left for the next run":""), !!bad||!made);
+      /* "0 created" on its own tells supply nothing, and the server already
+         said why for every row. Show it. */
+      if(!made||bad||held) this.showResult(out);
     }catch(e){ toast(e.message,true); }
     finally{ this.busy=false; render(); }
   },
@@ -565,6 +569,40 @@ const Uni = {
         style:"width:100%;font-size:11.5px"},JSON.stringify(out.sample,null,2)));
       api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
     }catch(e){ toast(e.message,true); }
+  },
+
+  /* Row by row: what went, what Unicommerce refused, what never left here. */
+  showResult(out){
+    const made=out.created||[], bad=out.failed||[], held=out.skipped||[];
+    const api=drawer(made.length?made.length+" order"+(made.length===1?"":"s")+" created in Unicommerce"
+                               :"Nothing was created",
+      made.length+" created · "+bad.length+" refused by Unicommerce · "
+      +held.length+" held back here",()=>{});
+
+    if(!made.length&&!bad.length&&!held.length)
+      api.body.appendChild(el("div",{class:"callout"},
+        el("b",{},"There was nothing to send. "),
+        "Only a row sitting at “Ready to Ship” with no order code against it goes to "
+        +"Unicommerce. If the stage already reads “Order created”, or the UC order code "
+        +"column shows a code, that row counts as done — downloading the Unicommerce file stamps "
+        +"the code and moves the row on as well. Tick the rows you meant, press "
+        +"“Send back to Ready to Ship”, then try this again."));
+
+    const list=(title,rows,tone,fmt)=>{
+      if(!rows.length) return;
+      api.body.appendChild(el("div",{class:"panel",style:"margin-bottom:10px"},
+        el("div",{class:"panel-h"},el("h3",{},title)),
+        el("div",{class:"panel-b"},
+          el("ul",{style:"margin:0 0 0 18px;font-size:13px"+(tone?";color:var(--"+tone+")":"")},
+            ...rows.map(x=>el("li",{},fmt(x)))))));
+    };
+    list(made.length+" created",made,null,x=>(x.name||"?")+" — "+x.code);
+    list(bad.length+" refused by Unicommerce",bad,"crit",
+      x=>(x.name||"?")+" — "+(x.why||"no reason given"));
+    list(held.length+" held back before sending",held,"warn",x=>(x.name||"?")+" — "+x.why);
+    if(out.more) api.body.appendChild(el("div",{class:"callout"},
+      out.more+" more row"+(out.more>1?"s":"")+" waiting — press the button again for the next batch."));
+    api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
   },
 
   async ping(){
@@ -1265,7 +1303,7 @@ function viewShip(){
   const wrap=el("div",{});
   const allReady=collabList().filter(c=>c.shipStatus==="Ready to Ship");
   const ready=allReady.filter(matches);
-  const cleanReady=ready.filter(c=>!collabProblems(c).length);
+  const cleanReady=ready.filter(c=>!collabProblems(c).length && !String(c.ucCode||"").trim());
   wrap.appendChild(el("div",{class:"view-head"},
     el("div",{},el("h1",{},"Ship queue"),
       el("p",{},"Everything marketing added is here. One click gives you the whole batch as a single file — Unicommerce, or Selloship when you are shipping direct. Paste the dispatch export back when it ships.")),
@@ -1359,6 +1397,9 @@ function viewShip(){
       el("button",{class:"btn btn-sm",onclick:()=>{UI.sel.clear();render();}},"Clear"),
       el("span",{style:"flex:1"}),
       el("button",{class:"btn btn-sm",onclick:()=>bulkStatus("On Hold")},"Put on hold"),
+      canCreateOrders()?el("button",{class:"btn btn-sm",
+        title:"Put these back with supply as if they had never been created",
+        onclick:bulkReopen},"Send back to Ready to Ship"):null,
       canCreateOrders()?el("button",{class:"btn btn-sm",onclick:downloadShipway},"Shipway"):null,
       canCreateOrders()?el("button",{class:"btn btn-sm",onclick:downloadSelloship},"Selloship"):null,
       canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadAllReady},"Unicommerce"):null));
@@ -1370,6 +1411,32 @@ function median(a){const s=[...a].sort((x,y)=>x-y);const m=s.length>>1;
 async function bulkStatus(status){
   for(const id of [...UI.sel]){ const c=S.collabs[id]; if(c) await Store.put("collabs",{...c,shipStatus:status}); }
   UI.sel.clear(); toast("Moved to "+status);
+}
+/* Undo for a stage set by mistake. The order code is the part that matters: a
+   row that keeps one counts as already sent and will never go to Unicommerce,
+   so clearing it is asked separately — it is only safe to clear when the
+   order does not actually exist over there. */
+async function bulkReopen(){
+  const rows=[...UI.sel].map(id=>S.collabs[id]).filter(Boolean);
+  if(!rows.length) return;
+  const real=rows.filter(c=>c.orderVia==="Unicommerce API"||c.uniPushedAt||String(c.awb||"").trim());
+  const coded=rows.filter(c=>String(c.ucCode||"").trim());
+  let ask="Send "+rows.length+" row"+(rows.length>1?"s":"")+" back to “Ready to Ship”?";
+  if(real.length) ask+="\n\nWarning: "+real.length+" of them has an AWB or was created over the API, so that "
+    +"order really does exist in Unicommerce. Moving the row here does not cancel it there.";
+  if(!confirm(ask)) return;
+  let clear=false;
+  if(coded.length) clear=confirm("Also clear the UC order code on "+coded.length+" row"
+    +(coded.length>1?"s":"")+", so they can be created again?\n\n"
+    +"OK     — the order was never really created in Unicommerce.\n"
+    +"Cancel — keep the code; the order is already over there.");
+  for(const c of rows){
+    const patch={...c, shipStatus:"Ready to Ship"};
+    if(clear){ patch.ucCode=""; patch.orderVia=""; patch.uniError=""; }
+    await Store.put("collabs",patch);
+  }
+  UI.sel.clear();
+  toast(rows.length+" row"+(rows.length>1?"s":"")+" back with supply"+(clear?", order codes cleared":""));
 }
 </script>
 <script>
