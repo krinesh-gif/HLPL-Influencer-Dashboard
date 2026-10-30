@@ -60,10 +60,14 @@ const istDate = (ms) => {
 };
 
 function tenantBase() {
-  const raw = String(process.env.UNI_TENANT || "").trim();
+  const raw = String(process.env.UNI_TENANT || "").trim().replace(/^\/+|\/+$/g, "");
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, "");
-  return "https://" + raw.replace(/^\/+|\/+$/g, "") + ".unicommerce.com";
+  /* A whole hostname is as likely to be pasted in as the tenant name alone,
+     so "aravi.unicommerce.com" must not become
+     "aravi.unicommerce.com.unicommerce.com". */
+  if (raw.includes(".")) return "https://" + raw;
+  return "https://" + raw + ".unicommerce.com";
 }
 
 function missingConfig() {
@@ -136,8 +140,20 @@ async function fetchToken(base) {
     if (alt.ok && alt.body && alt.body.access_token) r = alt;
   }
   if (!r.ok || !r.body || !r.body.access_token) {
-    const why = (r.body && (r.body.error_description || r.body.error)) || r.text || "no token in reply";
-    throw new Error("Unicommerce refused the login: " + String(why).slice(0, 200));
+    const host = base.replace(/^https?:\/\//, "");
+    const said = (r.body && (r.body.error_description || r.body.error)) || "";
+    /* Uniware answers a bad password in JSON. Anything else — an HTML page, a
+       proxy's "upstream connect error" — means the call never reached the
+       Uniware application, which is nearly always the wrong hostname. */
+    if (said) throw new Error("Unicommerce refused the login at " + host + ": " + said);
+    if (!r.status) throw new Error(
+      "Could not reach " + host + " at all. " + r.text +
+      " Check UNI_TENANT is the exact subdomain your team signs in to.");
+    throw new Error(
+      "Nothing answered as Uniware at " + host + " (HTTP " + (r.status || "no reply") + "). " +
+      "Check UNI_TENANT is the exact subdomain your team signs in to, and that Unicommerce " +
+      "has enabled API access for this account. It replied: " +
+      (String(r.text || "").replace(/\s+/g, " ").slice(0, 160) || "nothing"));
   }
   return {
     token: r.body.access_token,
