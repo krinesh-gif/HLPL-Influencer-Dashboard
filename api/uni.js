@@ -241,6 +241,8 @@ function uniErrors(r) {
 
 /* --------------------------------------------------- building a sale order */
 
+const isDuplicateCode = (err) => /already exist|duplicate/i.test(String(err || ""));
+
 function orderCodeMaker(settings, collabs) {
   const pfx = String(settings.orderPrefix || "PR").toUpperCase();
   const re = new RegExp("^" + pfx + "(\\d+)$", "i");
@@ -411,14 +413,18 @@ async function doPush(sql, base, ids, { dryRun }) {
   const created = [], failed = [];
   for (const c of batch) {
     let code = "", r = null, err = "";
-    /* Years of manual CSV uploads mean a number in the series may already be
-       taken in Uniware. Step past it rather than make supply work out which. */
-    for (let attempt = 0; attempt < 4; attempt++) {
+    const tried = [];
+    /* Years of manual CSV uploads mean a whole run of numbers may already be
+       taken in Uniware. Step past them rather than make supply work out which.
+       Uniware reports this as the phrase or as the code DUPLICATE_SALE_ORDER,
+       depending on the call, so both count. */
+    for (let attempt = 0; attempt < 12; attempt++) {
       code = nextCode();
+      tried.push(code);
       r = await uniPost(sql, base, "/services/rest/v1/oms/saleOrder/create",
         saleOrderPayload(c, code, settings, skuByCode));
       err = uniErrors(r);
-      if ((r.ok && r.body && r.body.successful) || !/already exist/i.test(err)) break;
+      if ((r.ok && r.body && r.body.successful) || !isDuplicateCode(err)) break;
     }
     if (r.ok && r.body && r.body.successful) {
       await saveCollab(sql, c.id, {
@@ -427,8 +433,14 @@ async function doPush(sql, base, ids, { dryRun }) {
       });
       created.push({ id: c.id, name: (c.ship || {}).name || "", code });
     } else {
-      await saveCollab(sql, c.id, { uniError: err || "Unicommerce rejected the order." });
-      failed.push({ id: c.id, name: (c.ship || {}).name || "", why: err });
+      /* A run of taken numbers is a different problem from a rejected order,
+         and it has a different fix, so it is not reported as the same thing. */
+      const why = isDuplicateCode(err)
+        ? "Unicommerce already has " + tried.join(", ") +
+          ". Raise \u201cNext order number\u201d in Setup past the codes your manual uploads used."
+        : (err || "Unicommerce rejected the order.");
+      await saveCollab(sql, c.id, { uniError: why });
+      failed.push({ id: c.id, name: (c.ship || {}).name || "", why });
     }
   }
   return { ok: true, created, failed, skipped, more: Math.max(0, queue.length - batch.length) };
