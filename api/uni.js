@@ -226,13 +226,16 @@ function saleOrderPayload(collab, code, settings, skuByCode) {
   const gifting = !!settings.gifting;
   const addrId = String(settings.addressId || "ADDR1");
   const items = [];
-  let discount = 0;
+  let discount = 0, prepaid = 0;
 
   for (const raw of collab.items || []) {
     const sku = skuByCode[String(raw.sku || "").toUpperCase()] || {};
-    const mrp = num(raw.mrp) || num(sku.mrp);
+    /* No MRP on the SKU would otherwise raise a zero-value order, which
+       Uniware accepts and then cannot invoice. sampleValue is the floor. */
+    const mrp = num(raw.mrp) || num(sku.mrp) || num(settings.sampleValue);
     const sellingPrice = mrp;
     const lineDiscount = gifting ? mrp : 0;
+    const linePrice = Math.max(0, sellingPrice - lineDiscount);
     const qty = Math.max(1, Math.round(num(raw.qty) || 1));
     for (let u = 0; u < qty; u++) {
       items.push({
@@ -244,11 +247,14 @@ function saleOrderPayload(collab, code, settings, skuByCode) {
         facilityCode: "",
         sellingPrice,
         discount: lineDiscount,
-        totalPrice: Math.max(0, sellingPrice - lineDiscount),
-        prepaidAmount: 0,
+        totalPrice: linePrice,
+        /* The order says PREPAID, so what is payable must also be paid or
+           Uniware carries it as an unpaid order. */
+        prepaidAmount: linePrice,
         shippingCharges: 0,
       });
       discount += lineDiscount;
+      prepaid += linePrice;
     }
   }
 
@@ -289,7 +295,7 @@ function saleOrderPayload(collab, code, settings, skuByCode) {
       totalDiscount: discount,
       totalShippingCharges: num(settings.shippingCharge),
       totalCashOnDeliveryCharges: 0,
-      totalPrepaidAmount: 0,
+      totalPrepaidAmount: prepaid + num(settings.shippingCharge),
       totalStoreCredit: 0,
     },
   };
@@ -361,6 +367,9 @@ async function doPush(sql, base, ids, { dryRun }) {
       wouldSend: batch.length,
       more: Math.max(0, queue.length - batch.length),
       sample: batch.length ? saleOrderPayload(batch[0], nextCode(), settings, skuByCode) : null,
+      /* Flags the zero-value order before it is raised, not after. */
+      zeroValue: batch.filter(c => !saleOrderPayload(c, "X", settings, skuByCode)
+        .saleOrder.totalPrepaidAmount).map(c => (c.ship || {}).name || c.id),
     };
   }
 

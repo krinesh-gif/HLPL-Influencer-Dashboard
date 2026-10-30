@@ -411,7 +411,7 @@ const DEFAULT_SETTINGS = {
   gifting:false, shippingCharge:0, brand:"Aravi Organic",
   shipMethod:"STD", currency:"INR", addressId:"SENSE", orderNextNo:632,
   selloshipPayment:4, declaredValue:500, fallbackEmail:"", shipwayWarehouse:"",
-  uniAutoPush:false, uniAutoSync:true,
+  uniAutoPush:false, uniAutoSync:true, sampleValue:0,
   boxDims:{"PR Box":{l:25,b:20,h:12,w:600},"Normal Box":{l:20,b:15,h:10,w:350}},
   ucColumns:UC_DEFAULT_COLUMNS, ucVersion:UC_TEMPLATE_VERSION
 };
@@ -562,6 +562,10 @@ const Uni = {
       if(out.skipped&&out.skipped.length) api.body.appendChild(el("div",{class:"callout crit"},
         el("b",{},out.skipped.length+" row"+(out.skipped.length>1?"s":"")+" held back: "),
         out.skipped.map(x=>(x.name||"?")+" \u2014 "+x.why).join("; ")));
+      if((out.zeroValue||[]).length) api.body.appendChild(el("div",{class:"callout crit"},
+        el("b",{},out.zeroValue.length+" order"+(out.zeroValue.length>1?"s":"")+" would be raised at "+"₹0. "),
+        "Unicommerce takes the order but cannot invoice it. Put an MRP on the SKUs, or set "
+        +"“Value per unit when the SKU has no MRP” under Setup."));
       api.body.appendChild(el("div",{class:"callout"},
         el("b",{},"Nothing has been sent. "),
         "This is the payload for the first order. Check the channel, the address and the SKU codes, then use \u201cCreate in Unicommerce\u201d."));
@@ -1863,6 +1867,10 @@ function viewSetup(){
           {req:true,hint:"Mandatory in UC. Must match a shipping method that exists in your tenant."}),
         field("Currency code",input(s.currency,v=>{s.currency=v.trim().toUpperCase();save();},{placeholder:"INR"})),
         field("Shipping charge per line",input(s.shippingCharge,v=>{s.shippingCharge=num(v);save();},{type:"number",min:"0"})),
+        field("Value per unit when the SKU has no MRP",
+          input(s.sampleValue,v=>{s.sampleValue=num(v);save();},{type:"number",min:"0",placeholder:"0"}),
+          {hint:"Leave 0 only if every SKU carries an MRP. Otherwise the sale order is raised at "
+            +"₹0 and Unicommerce cannot invoice it. Per-SKU MRP always wins over this."}),
         field("Value treatment",select(s.gifting?"gift":"charge",[["charge","Selling price only — as on your past uploads"],["gift","Gifting — price with a matching discount, net ₹0"]],
           v=>{s.gifting=(v==="gift");save();}),{hint:"Your working file filled Selling Price and left Discount empty."})))));
 
