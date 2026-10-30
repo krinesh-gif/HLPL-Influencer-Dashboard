@@ -226,13 +226,29 @@ function tidyError(m) {
     .trim()
     .slice(0, 200);
 }
+/* Uniware spreads one rejection over code, fieldName, description, message and
+   errorParams, and fills whichever it feels like. Reading only one of them
+   turned a diagnosable error into a bare word, so take the lot. */
+function describeError(e) {
+  if (e == null) return "";
+  if (typeof e !== "object") return tidyError(e);
+  const out = [];
+  const said = tidyError(e.message || e.description || "");
+  if (said) out.push(said);
+  const code = String(e.code == null ? "" : e.code).trim();
+  if (code && code !== "0") out.push("[" + code + "]");
+  if (e.fieldName) out.push("field " + tidyError(e.fieldName));
+  const p = e.errorParams;
+  if (Array.isArray(p) && p.length) out.push(p.map(tidyError).join(", "));
+  else if (p && typeof p === "object" && Object.keys(p).length)
+    out.push(Object.keys(p).map((k) => k + "=" + tidyError(p[k])).join(", "));
+  return out.join(" ").trim();
+}
 function uniErrors(r) {
   if (r.status === 0) return tidyError(r.text);
   const b = r.body;
   if (b && Array.isArray(b.errors) && b.errors.length) {
-    return [...new Set(b.errors
-      .map((e) => tidyError((e && (e.message || e.description || e.code)) || e))
-      .filter(Boolean))].join("; ");
+    return [...new Set(b.errors.map(describeError).filter(Boolean))].join("; ");
   }
   if (b && b.message) return tidyError(b.message);
   if (!r.ok) return "Unicommerce replied " + r.status + ". " + tidyError(r.text);
@@ -440,7 +456,11 @@ async function doPush(sql, base, ids, { dryRun }) {
           ". Raise \u201cNext order number\u201d in Setup past the codes your manual uploads used."
         : (err || "Unicommerce rejected the order.");
       await saveCollab(sql, c.id, { uniError: why });
-      failed.push({ id: c.id, name: (c.ship || {}).name || "", why });
+      failed.push({ id: c.id, name: (c.ship || {}).name || "", why, code,
+        /* Undocumented error codes come up, so keep what Uniware actually
+           sent rather than only what could be parsed out of it. */
+        raw: String((r && r.text) || "").replace(/\s+/g, " ").slice(0, 600),
+        skus: (c.items || []).map((i) => i.sku) });
     }
   }
   return { ok: true, created, failed, skipped, more: Math.max(0, queue.length - batch.length) };
@@ -531,7 +551,7 @@ async function doSkuPrices(sql, base, codes) {
   }
   list = list.slice(0, SKU_BATCH);
 
-  const updated = [], same = [], missing = [];
+  const updated = [], same = [], missing = [], odd = [];
   for (const sku of list) {
     const code = String(sku.code).trim();
     /* Only the mandatory field: Uniware refuses a request object carrying
@@ -549,13 +569,21 @@ async function doSkuPrices(sql, base, codes) {
       missing.push({ code, why: "no MRP set against it in Unicommerce", name: dto.name || "" });
       continue;
     }
+    /* A kit or a disabled item cannot go into an order as a plain line, which
+       is the sort of thing Uniware reports only as INVALID_SALE_ORDER_ITEM_STATE.
+       Worth knowing before a push, so it is reported here. */
+    const kind = String(dto.type || "SIMPLE").toUpperCase();
+    if (kind !== "SIMPLE" || dto.enabled === false) {
+      odd.push({ code, kind, enabled: dto.enabled !== false,
+        components: (dto.componentItemTypes || []).length });
+    }
     if (mrp === num(sku.mrp)) { same.push(code); continue; }
     await sql`
       UPDATE docs SET data = data || ${JSON.stringify({ mrp })}::jsonb, updated_at = now()
       WHERE collection = 'skus' AND id = ${sku.id}`;
     updated.push({ code, from: num(sku.mrp), to: mrp, name: dto.name || sku.name || "" });
   }
-  return { ok: true, looked: list.length, updated, same: same.length, missing };
+  return { ok: true, looked: list.length, updated, same: same.length, missing, odd };
 }
 
 /* ------------------------------------------------------------------- ping */

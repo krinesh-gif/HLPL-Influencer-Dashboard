@@ -601,8 +601,18 @@ const Uni = {
             ...rows.map(x=>el("li",{},fmt(x)))))));
     };
     list(made.length+" created",made,null,x=>(x.name||"?")+" — "+x.code);
-    list(bad.length+" refused by Unicommerce",bad,"crit",
-      x=>(x.name||"?")+" — "+(x.why||"no reason given"));
+    if(bad.length){
+      api.body.appendChild(el("div",{class:"panel",style:"margin-bottom:10px"},
+        el("div",{class:"panel-h"},el("h3",{},bad.length+" refused by Unicommerce")),
+        el("div",{class:"panel-b"},...bad.map(x=>el("div",{style:"margin-bottom:12px"},
+          el("div",{},el("b",{},x.name||"?"),x.code?el("span",{class:"t-sub"}," as "+x.code):null),
+          el("div",{style:"color:var(--crit);font-size:13px"},x.why||"no reason given"),
+          (x.skus&&x.skus.length)?el("div",{class:"t-sub mono",style:"white-space:normal"},
+            "SKUs on the row: "+x.skus.filter(Boolean).join(", ")):null,
+          x.raw?el("details",{style:"margin-top:4px"},
+            el("summary",{class:"t-sub",style:"cursor:pointer"},"What Unicommerce actually sent"),
+            el("div",{class:"mono",style:"white-space:pre-wrap;font-size:11px;opacity:.85"},x.raw)):null)))));
+    }
     list(held.length+" held back before sending",held,"warn",x=>(x.name||"?")+" — "+x.why);
     if(out.more) api.body.appendChild(el("div",{class:"callout"},
       out.more+" more row"+(out.more>1?"s":"")+" waiting — press the button again for the next batch."));
@@ -645,6 +655,15 @@ const Uni = {
         });
         api.body.appendChild(box);
       }
+      if((out.odd||[]).length) api.body.appendChild(el("div",{class:"callout crit"},
+        el("b",{},out.odd.length+" SKU"+(out.odd.length>1?"s":"")
+          +" Unicommerce does not hold as a plain item: "),
+        out.odd.map(x=>x.code+" ("+(x.kind!=="SIMPLE"?x.kind.toLowerCase()
+          +(x.components?" of "+x.components:""):"")
+          +(x.enabled?"":(x.kind!=="SIMPLE"?", ":"")+"disabled")+")").join("; ")
+        +". A kit or a disabled item cannot go into a sale order as a single line, which is one thing "
+        +"Unicommerce reports as INVALID_SALE_ORDER_ITEM_STATE. Ship those as their parts, or enable "
+        +"them in Unicommerce."));
       if(!up.length&&!miss.length) api.body.appendChild(el("div",{class:"callout"},
         el("b",{},"Every SKU already matches Unicommerce. "),"Nothing to change."));
       api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
