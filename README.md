@@ -222,6 +222,12 @@ else. A SKU with no MRP in Uniware, or none at all, is named in the result and f
 back to the per-unit value in Setup. Without a price the sale order is raised at
 Rs 0.00, which Uniware accepts and then cannot invoice.
 
+An AWB shown on the board links to a tracking page. **Tracking page link** in
+Setup holds the pattern, `https://selloship.com/pages/tracking/{awb}` by default,
+and `{awb}` is replaced by the number. A per-shipment link that Unicommerce returns
+is used in preference to it. Only an `http` or `https` pattern is turned into a
+link, and the AWB is URL-escaped, because this ends up in an `href`.
+
 Two switches live in Setup → Unicommerce live link:
 
 - **Create orders automatically** — off by default, which keeps the rule that only

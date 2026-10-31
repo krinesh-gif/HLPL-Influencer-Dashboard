@@ -412,6 +412,7 @@ const DEFAULT_SETTINGS = {
   shipMethod:"STD", currency:"INR", addressId:"SENSE", orderNextNo:632,
   selloshipPayment:4, declaredValue:500, fallbackEmail:"", shipwayWarehouse:"",
   uniAutoPush:false, uniAutoSync:true, sampleValue:0,
+  trackUrl:"https://selloship.com/pages/tracking/{awb}",
   boxDims:{"PR Box":{l:25,b:20,h:12,w:600},"Normal Box":{l:20,b:15,h:10,w:350}},
   ucColumns:UC_DEFAULT_COLUMNS, ucVersion:UC_TEMPLATE_VERSION
 };
@@ -957,6 +958,26 @@ const cpvOf = c=>num(c.views)?num(c.price)/num(c.views):0;
 const cpeOf = c=>engagements(c)?num(c.price)/engagements(c):0;
 const outstanding = c=>c.barter?0:Math.max(0,num(c.price)-num(c.paid));
 const isOpen = c=>!["Delivered","Cancelled"].includes(c.shipStatus);
+/* A tracking page for the AWB. Unicommerce sometimes hands back a link of its
+   own, which is per-shipment and so wins; otherwise the AWB is dropped into
+   the pattern from Setup. Only http(s) is allowed through, since this ends up
+   in an href. */
+function trackUrlFor(c){
+  const given=String((c||{}).trackLink||"").trim();
+  if(/^https?:\/\//i.test(given)) return given;
+  const awb=String((c||{}).awb||"").trim();
+  const pat=String(S.settings.trackUrl||"").trim();
+  if(!awb||!pat||!/^https?:\/\//i.test(pat)||pat.indexOf("{awb}")<0) return "";
+  return pat.replace(/\{awb\}/g,encodeURIComponent(awb));
+}
+function awbLink(c,text,cls){
+  const url=trackUrlFor(c), label=text||String((c||{}).awb||"");
+  if(!label) return null;
+  return url
+    ? el("a",{href:url,target:"_blank",rel:"noopener",class:cls||null,
+        title:"Open the tracking page for "+((c||{}).awb||"")},label)
+    : el("span",{class:cls||null},label);
+}
 const shipTAT = c=>daysBetween(c.requestedAt,c.dispatchDate);
 const pendingAge = c=>["Ready to Ship","Order Created"].includes(c.shipStatus)?daysSince(c.requestedAt):null;
 const agoText = d=>{const n=daysSince(d);
@@ -1065,6 +1086,7 @@ function briefText(c){
     "  "+[st.addr1,st.addr2].filter(Boolean).join(", "),
     "  "+st.city+", "+st.state+" - "+digits(st.pin),
     "",
+    c.awb?("Tracking   : "+c.awb+(trackUrlFor(c)?"  "+trackUrlFor(c):"")):null,
     c.notes?("Note: "+c.notes):null
   ].filter(v=>v!==null).join("\n");
 }
@@ -1277,7 +1299,8 @@ function viewCollabs(){
       itemsCell(c),
       el("td",{},statusPill(c), probs.length&&c.shipStatus==="Draft"
         ? el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},probs.length+" field"+(probs.length>1?"s":"")+" to fix")
-        : c.awb?el("div",{class:"t-sub mono"},c.courier+" "+c.awb):null),
+        : c.awb?el("div",{class:"t-sub mono"},
+            awbLink(c,[c.courier,c.awb].filter(Boolean).join(" "))):null),
       el("td",{class:"num"},c.barter?el("span",{class:"tag"},"barter"):inr(c.price)),
       el("td",{},pill(c.payStatus,PAY_TONE[c.payStatus]),
         outstanding(c)>0?el("div",{class:"t-sub mono"},inr(outstanding(c))+" open"):null),
@@ -1471,7 +1494,7 @@ function viewShip(){
         c.uniError?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600;white-space:normal;max-width:220px"},
           c.uniError):null),
       el("td",{class:"mono"},
-        c.awb?(c.trackLink?el("a",{href:c.trackLink,target:"_blank",rel:"noopener"},c.awb):el("div",{},c.awb)):"—",
+        c.awb?el("div",{},awbLink(c)):"—",
         c.courier?el("div",{class:"t-sub"},c.courier):null),
       el("td",{class:"nowrap"},
         el("button",{class:"btn btn-sm btn-q",title:"Copy the handoff note",onclick:()=>copyText(briefText(c))},"Copy brief"),
@@ -1982,6 +2005,11 @@ function viewSetup(){
           v=>{s.selloshipPayment=num(v);save();})),
         field("Declared value when no MRP (₹)",input(s.declaredValue,v=>{s.declaredValue=num(v);save();},{type:"number",min:"0"}),
           {hint:"Couriers reject a ₹0 parcel. Used only when the SKUs carry no MRP."}),
+        field("Tracking page link",input(s.trackUrl,v=>{s.trackUrl=v.trim();save();render();},
+          {placeholder:"https://selloship.com/pages/tracking/{awb}"}),
+          {span:true,hint:"Where an AWB on the board links to. {awb} is replaced by the tracking number. "
+            +"Leave it blank to show the number as plain text. A link Unicommerce gives for a shipment "
+            +"is used instead of this one."}),
         field("Shipway warehouse ID",input(s.shipwayWarehouse,v=>{s.shipwayWarehouse=v.trim();save();},
           {placeholder:"blank unless Shipway gave you one"})),
         field("Fallback email",input(s.fallbackEmail,v=>{s.fallbackEmail=v.trim();save();},
@@ -2283,7 +2311,9 @@ function openCollabDraft(d,id,title,sub,focus){
     ship.appendChild(el("div",{class:"grid2",style:"margin-top:12px"},
       field("UC sale order code",input(d.ucCode,v=>{d.ucCode=v.trim();},{placeholder:"Filled by the bulk file"})),
       field("Courier",input(d.courier,v=>{d.courier=v;},{placeholder:"Delhivery / Bluedart"})),
-      field("AWB / tracking",input(d.awb,v=>{d.awb=v.trim();})),
+      field("AWB / tracking",input(d.awb,v=>{d.awb=v.trim();}),
+        trackUrlFor(d)?{hint:el("a",{href:trackUrlFor(d),target:"_blank",rel:"noopener"},
+          "Open the tracking page")}:{}),
       field("Raised on",input(d.requestedAt,v=>{d.requestedAt=v;},{type:"date"})),
       field("Dispatched on",input(d.dispatchDate,v=>{d.dispatchDate=v;},{type:"date"})),
       field("Delivered on",input(d.deliveryDate,v=>{d.deliveryDate=v;},{type:"date"}))));
