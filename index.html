@@ -295,8 +295,14 @@ svg text{font-family:var(--sans)}
 const STATES = ["Andaman and Nicobar Islands","Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chandigarh","Chhattisgarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Goa","Gujarat","Haryana","Himachal Pradesh","Jammu and Kashmir","Jharkhand","Karnataka","Kerala","Ladakh","Lakshadweep","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Puducherry","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal"];
 
 const SHIP_FLOW = ["Draft","Ready to Ship","Order Created","Dispatched","Delivered"];
-const SHIP_ALL  = [...SHIP_FLOW,"On Hold","Cancelled"];
-const SHIP_TONE = {"Draft":"neutral","Ready to Ship":"warn","Order Created":"info","Dispatched":"rose","Delivered":"good","On Hold":"crit","Cancelled":"neutral"};
+const SHIP_ALL  = [...SHIP_FLOW,"RTO","On Hold","Cancelled"];
+const SHIP_TONE = {"Draft":"neutral","Ready to Ship":"warn","Order Created":"info","Dispatched":"rose","Delivered":"good","RTO":"crit","On Hold":"crit","Cancelled":"neutral"};
+/* Where the parcel actually is, as the courier last scanned it. Read off
+   Unicommerce; separate from the stage above, which is what the two teams
+   act on. */
+const TRACK_STAGES = ["Picked up","In transit","Out for delivery","Undelivered","RTO","Delivered","Lost"];
+const TRACK_TONE = {"Picked up":"info","In transit":"info","Out for delivery":"warn",
+  "Undelivered":"crit","RTO":"crit","Delivered":"good","Lost":"crit"};
 const PAY_STATES = ["Not Applicable (Barter)","Not Due","Due","Partially Paid","Paid"];
 const PAY_TONE = {"Not Applicable (Barter)":"neutral","Not Due":"neutral","Due":"warn","Partially Paid":"warn","Paid":"good"};
 const TIERS = ["Nano (<10K)","Micro (10K-100K)","Mid (100K-500K)","Macro (500K-1M)","Celebrity (1M+)"];
@@ -957,7 +963,7 @@ const erOf = c=>{const b=num(c.reach)||num(c.views); return b?(engagements(c)/b*
 const cpvOf = c=>num(c.views)?num(c.price)/num(c.views):0;
 const cpeOf = c=>engagements(c)?num(c.price)/engagements(c):0;
 const outstanding = c=>c.barter?0:Math.max(0,num(c.price)-num(c.paid));
-const isOpen = c=>!["Delivered","Cancelled"].includes(c.shipStatus);
+const isOpen = c=>!["Delivered","Cancelled","RTO"].includes(c.shipStatus);
 /* A tracking page for the AWB. Unicommerce sometimes hands back a link of its
    own, which is per-shipment and so wins; otherwise the AWB is dropped into
    the pattern from Setup. Only http(s) is allowed through, since this ends up
@@ -1093,7 +1099,7 @@ function briefText(c){
 </script>
 <script>
 /* ================= UI state + router ================= */
-const UI = { tab:"quick", q:"", month:"", status:"", pay:"", raised:"", sel:new Set(), anMonth:"" };
+const UI = { tab:"quick", q:"", month:"", status:"", pay:"", raised:"", track:"", sel:new Set(), anMonth:"" };
 const TABS = [
   {id:"quick",    label:"New shipment",lane:"lane-s"},
   {id:"collabs",  label:"Collabs",     lane:"lane-m"},
@@ -1187,6 +1193,28 @@ function renderRibbon(){
 /* ================= shared bits ================= */
 function pill(text,tone){ return el("span",{class:"pill "+(tone||"neutral")},text); }
 function statusPill(c){ return pill(c.shipStatus,SHIP_TONE[c.shipStatus]); }
+/* Whether a stage read off a courier is a step forward. A delivery is hard
+   evidence and wins; RTO is terminal but must not pull a delivered row back.
+   The same rule runs server-side in api/uni.js for the Unicommerce sync. */
+function advanceStage(current,want){
+  if(!want||want===current) return "";
+  if(want==="Delivered") return "Delivered";
+  if(current==="Delivered") return "";
+  if(want==="RTO") return "RTO";
+  if(current==="RTO") return "";
+  const a=SHIP_FLOW.indexOf(current), b=SHIP_FLOW.indexOf(want);
+  return b>a ? want : "";
+}
+/* The courier's own words under the pill, when they say more than the pill. */
+function trackPill(c){
+  const st=(c||{}).trackStage;
+  if(!st) return null;
+  const raw=String((c||{}).trackRaw||"").trim();
+  const extra=raw && raw.toLowerCase().replace(/[^a-z]/g,"")!==st.toLowerCase().replace(/[^a-z]/g,"");
+  return el("div",{style:"margin-top:3px"},
+    pill(st,TRACK_TONE[st]||"neutral"),
+    extra?el("div",{class:"t-sub",style:"white-space:normal;max-width:170px"},raw):null);
+}
 function personCell(c){
   const inf=infOf(c)||{};
   return el("td",{},
@@ -1226,6 +1254,12 @@ function filterBar(opts){
       el("option",{value:""},"All shipment states"),
       ...SHIP_ALL.map(s=>el("option",{value:s,selected:UI.status===s?true:null},s))));
   }
+  if(opts.track){
+    bar.appendChild(el("select",{title:"Where the courier last scanned it",
+      onchange:e=>{UI.track=e.target.value;UI.sel.clear();render();}},
+      el("option",{value:""},"Anywhere with the courier"),
+      ...TRACK_STAGES.map(t=>el("option",{value:t,selected:UI.track===t?true:null},t))));
+  }
   if(opts.raised){
     bar.appendChild(el("select",{title:"Show only what was raised recently",
       onchange:e=>{UI.raised=e.target.value;UI.sel.clear();render();}},
@@ -1237,9 +1271,10 @@ function filterBar(opts){
       el("option",{value:""},"All payment states"),
       ...PAY_STATES.map(s=>el("option",{value:s,selected:UI.pay===s?true:null},s))));
   }
-  if(UI.q||UI.month||UI.status||UI.pay||UI.raised)
+  if(UI.q||UI.month||UI.status||UI.pay||UI.raised||UI.track)
     bar.appendChild(el("button",{class:"btn btn-q btn-sm",
-      onclick:()=>{UI.q="";UI.month="";UI.status="";UI.pay="";UI.raised="";UI.sel.clear();render();}},"Clear filters"));
+      onclick:()=>{UI.q="";UI.month="";UI.status="";UI.pay="";UI.raised="";UI.track="";
+        UI.sel.clear();render();}},"Clear filters"));
   return bar;
 }
 function matches(c){
@@ -1247,6 +1282,7 @@ function matches(c){
   if(UI.month && c.month!==UI.month) return false;
   if(UI.status && c.shipStatus!==UI.status) return false;
   if(UI.pay && c.payStatus!==UI.pay) return false;
+  if(UI.track && c.trackStage!==UI.track) return false;
   if(UI.raised){
     const w=RAISED_WINDOWS.find(x=>x.v===UI.raised), n=daysSince(c.requestedAt);
     if(w && (n===null || !w.keep(n))) return false;
@@ -1297,7 +1333,7 @@ function viewCollabs(){
       raisedCell(c),
       el("td",{},el("div",{},c.deliverable||"—"),el("div",{class:"t-sub"},c.platform+" · "+monthLabel(c.month))),
       itemsCell(c),
-      el("td",{},statusPill(c), probs.length&&c.shipStatus==="Draft"
+      el("td",{},statusPill(c), trackPill(c), probs.length&&c.shipStatus==="Draft"
         ? el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},probs.length+" field"+(probs.length>1?"s":"")+" to fix")
         : c.awb?el("div",{class:"t-sub mono"},
             awbLink(c,[c.courier,c.awb].filter(Boolean).join(" "))):null),
@@ -1437,7 +1473,7 @@ function viewShip(){
         /* Only the address-clean rows, because those are the ones that will go. */
         "Create in Unicommerce"+(UI.sel.size?" · "+UI.sel.size
           :(cleanReady.length?" · "+cleanReady.length:""))):null,
-      canCreateOrders()?el("button",{class:"btn",onclick:openPasteBack},"Paste dispatch details"):null,
+      canCreateOrders()?el("button",{class:"btn",onclick:openPasteBack},"Paste courier status"):null,
       canCreateOrders()?el("button",{class:"btn",onclick:openBulkBuild},"Review first"):null,
       canCreateOrders()?el("button",{class:"btn btn-s",onclick:downloadAllReady},
         "Unicommerce"+(UI.sel.size?" · "+UI.sel.size:(ready.length?" · "+ready.length:""))):null,
@@ -1457,7 +1493,13 @@ function viewShip(){
   wrap.appendChild(el("div",{class:"kpis"},
     kpi("Ready to ship",String(allReady.length),blocked.length?blocked.length+" blocked on address":"All address-clean","supply"),
     kpi("In UC, not dispatched",String(collabList().filter(c=>c.shipStatus==="Order Created").length),"Orders created, awaiting pickup"),
-    kpi("In transit",String(collabList().filter(c=>c.shipStatus==="Dispatched").length),"AWB assigned"),
+    kpi("Out for delivery",
+      String(collabList().filter(c=>c.trackStage==="Out for delivery").length),
+      collabList().filter(c=>c.trackStage==="In transit").length+" still in transit"),
+    kpi("Needs a look",
+      String(collabList().filter(c=>["Undelivered","RTO","Lost"].includes(c.trackStage)
+        ||c.shipStatus==="RTO").length),
+      "Undelivered, coming back or lost","supply"),
     kpi("Median request→dispatch",tats.length?median(tats)+" d":"—",tats.length+" shipments measured"),
     kpi("Oldest pending",String(Math.max(0,...collabList().map(c=>pendingAge(c)||0)))+" d","Since marketing raised it")));
 
@@ -1465,7 +1507,7 @@ function viewShip(){
     el("b",{},blocked.length+" row"+(blocked.length>1?"s":"")+" cannot go into UC yet — "),
     "pincode, state or mobile is wrong. Open the row and fix it, or send it back to marketing. UC rejects the whole file for one bad state name."));
 
-  wrap.appendChild(filterBar({pay:false,raised:true}));
+  wrap.appendChild(filterBar({pay:false,raised:true,track:true}));
   if(!L.length){ wrap.appendChild(el("div",{class:"panel"},UI.raised||UI.q||UI.month||UI.status
     ? emptyState("Nothing raised in that window","Widen it with the date filter above, or clear the filters.")
     : emptyState("Queue is clear","Nothing waiting on supply right now."))); return wrap; }
@@ -1486,7 +1528,7 @@ function viewShip(){
         el("div",{class:"t-sub mono"},digits((c.ship||{}).pin)||"no pin"),
         probs.length?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},probs[0][1]):null),
       raisedCell(c),
-      el("td",{},statusPill(c),
+      el("td",{},statusPill(c), trackPill(c),
         age!==null?el("div",{},el("div",{class:"t-sub mono"},age+"d in queue"),
           el("div",{class:"agebar"},el("i",{style:"width:"+Math.min(100,age*14)+"%;background:"+(age>=4?"var(--crit)":age>=2?"var(--warn)":"var(--teal)")}))):null),
       el("td",{class:"mono"},c.ucCode||"—",
@@ -3967,6 +4009,7 @@ function pbStage(raw){
   if(!v) return "";
   if(/\bDELIVERED\b/.test(v)) return "Delivered";
   if(/\bCANCEL/.test(v)) return "Cancelled";
+  if(/\bRTO\b|RETURN TO ORIGIN|RETURNED TO ORIGIN/.test(v)) return "RTO";
   if(/\b(IN TRANSIT|INTRANSIT|TRANSIT|SHIPPED|DISPATCHED|OUT FOR DELIVERY|PICKED UP|PICKUP DONE|SHIPMENT PICKED)\b/.test(v))
     return "Dispatched";
   if(/\b(PENDING|MANIFESTED|NOT PICKED|READY TO SHIP|LABEL GENERATED)\b/.test(v)) return "Order Created";
@@ -4040,7 +4083,7 @@ function openPasteBack(){
     const tb=el("tbody",{});
     matched.forEach(r=>{
       const now=r.collab.shipStatus;
-      const fwd=r.stage && SHIP_FLOW.indexOf(r.stage)>=0 && SHIP_FLOW.indexOf(now)>SHIP_FLOW.indexOf(r.stage);
+      const fwd=!!r.stage && !advanceStage(now,r.stage);
       tb.appendChild(el("tr",{},
         el("td",{class:"mono"},r.code),
         el("td",{},(r.collab.ship||{}).name||"—"),
@@ -4072,8 +4115,8 @@ function openPasteBack(){
       const c=S.collabs[r.collab.id]; if(!c) continue;
       const patch={...c};
       /* Only ever forwards: a row already Delivered is not pulled back. */
-      if(r.stage && SHIP_FLOW.indexOf(r.stage)>SHIP_FLOW.indexOf(c.shipStatus)) patch.shipStatus=r.stage;
-      else if(r.stage && SHIP_FLOW.indexOf(c.shipStatus)<0) patch.shipStatus=r.stage;
+      const next=advanceStage(c.shipStatus,r.stage);
+      if(next) patch.shipStatus=next;
       if(!statusOnly){
         if(r.awb && !c.awb) patch.awb=r.awb;
         if(r.courier && !c.courier) patch.courier=r.courier;

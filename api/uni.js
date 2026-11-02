@@ -475,6 +475,37 @@ async function doPush(sql, base, ids, { dryRun }) {
 
 /* ------------------------------------------------------------------- sync */
 
+/* The courier's own scan, off trackingStatus / courierStatus. Uniware does not
+   document these strings and every courier words them differently, so match on
+   the words and the usual two-letter codes, and return "" rather than a guess
+   when nothing fits. The raw text is kept either way, so nothing is lost.
+   Order matters: "RTO Delivered" is an RTO, not a delivery. */
+const SHIP_FLOW = ["Draft", "Ready to Ship", "Order Created", "Dispatched", "Delivered"];
+function trackStageOf(raw) {
+  const v = String(raw || "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+  if (!v) return "";
+  if (/\b(RTO|RTO INITIATED|RETURN TO ORIGIN|RETURNED TO ORIGIN|RETURN INITIATED)\b/.test(v)) return "RTO";
+  if (/\b(LOST|DAMAGED|DESTROYED)\b/.test(v)) return "Lost";
+  if (/\b(DELIVERED|DLVD|DL)\b/.test(v)) return "Delivered";
+  if (/\b(OUT FOR DELIVERY|OFD|OOD)\b/.test(v)) return "Out for delivery";
+  if (/\b(UNDELIVERED|NOT DELIVERED|NDR|FAILED|FAILED ATTEMPT|ATTEMPTED|UD)\b/.test(v)) return "Undelivered";
+  if (/\b(IN TRANSIT|INTRANSIT|TRANSIT|IT|SHIPPED|BAGGED|REACHED|ARRIVED|MISROUTE)\b/.test(v)) return "In transit";
+  if (/\b(PICKED UP|PICKUP DONE|PICKED|PICKUP|SHIPMENT PICKED|MANIFEST|MANIFESTED)\b/.test(v)) return "Picked up";
+  return "";
+}
+/* Which board stage a courier scan implies, and whether that is a step
+   forward. A delivery date is hard evidence and wins over anything; RTO is
+   terminal but must not pull a delivered row backwards. */
+function advanceStage(current, want) {
+  if (!want || want === current) return "";
+  if (want === "Delivered") return "Delivered";
+  if (current === "Delivered") return "";
+  if (want === "RTO") return "RTO";
+  if (current === "RTO") return "";
+  const a = SHIP_FLOW.indexOf(current), b = SHIP_FLOW.indexOf(want);
+  return b > a ? want : "";
+}
+
 /* Uniware's own marketplace sync is not instant, so a row that shows no
    tracking yet is normal rather than broken. */
 function readPackage(dto) {
@@ -489,6 +520,8 @@ async function doSync(sql, base) {
   const open = collabs
     .filter((c) => String(c.ucCode || "").trim())
     .filter((c) => c.shipStatus === "Order Created" || c.shipStatus === "Dispatched")
+    /* An undelivered or out-for-delivery row is still worth re-reading; a
+       delivered or returned one is finished. */
     .sort((a, b) => String(b.requestedAt || "").localeCompare(String(a.requestedAt || "")))
     .slice(0, SYNC_BATCH);
 
@@ -512,24 +545,36 @@ async function doSync(sql, base) {
     const dispatched = istDate(pkg && pkg.dispatched);
     const delivered = istDate(pkg && pkg.delivered);
     const link = String((pkg && pkg.trackingLink) || "").trim();
+    /* Either field carries the scan, depending on the courier. */
+    const rawScan = [pkg && pkg.trackingStatus, pkg && pkg.courierStatus]
+      .map((x) => String(x || "").trim()).filter(Boolean).join(" / ");
+    const scan = trackStageOf(rawScan) ||
+      (delivered ? "Delivered" : dispatched ? "In transit" : "");
 
     if (awb && awb !== c.awb) patch.awb = awb;
     if (courier && courier !== c.courier) patch.courier = courier;
     if (dispatched && dispatched !== c.dispatchDate) patch.dispatchDate = dispatched;
     if (delivered && delivered !== c.deliveryDate) patch.deliveryDate = delivered;
     if (link && link !== c.trackLink) patch.trackLink = link;
+    if (scan && scan !== c.trackStage) patch.trackStage = scan;
+    if (rawScan && rawScan !== c.trackRaw) patch.trackRaw = rawScan.slice(0, 120);
 
     /* Only ever forwards. Supply may have already moved a row on by hand. */
-    const want = delivered ? "Delivered" : dispatched ? "Dispatched" : c.shipStatus;
-    if (want !== c.shipStatus && !(c.shipStatus === "Delivered" && want === "Dispatched")) {
-      patch.shipStatus = want;
-    }
+    /* A courier can scan DELIVERED before Uniware has the delivery date on
+       the package, so the scan alone is enough. */
+    const implied = (delivered || scan === "Delivered") ? "Delivered"
+      : scan === "RTO" ? "RTO"
+      : (dispatched || ["Picked up", "In transit", "Out for delivery", "Undelivered"].includes(scan))
+        ? "Dispatched" : "";
+    const next = advanceStage(c.shipStatus, implied);
+    if (next) patch.shipStatus = next;
     if (c.uniError) patch.uniError = "";
 
     if (Object.keys(patch).length) {
       patch.uniSyncedAt = new Date().toISOString();
       await saveCollab(sql, c.id, patch);
-      updated.push({ id: c.id, code: c.ucCode, awb: patch.awb || c.awb || "", stage: patch.shipStatus || c.shipStatus });
+      updated.push({ id: c.id, code: c.ucCode, awb: patch.awb || c.awb || "",
+        stage: patch.shipStatus || c.shipStatus, scan: patch.trackStage || c.trackStage || "" });
     } else {
       unchanged.push(c.ucCode);
     }

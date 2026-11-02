@@ -213,7 +213,7 @@ and the access token is cached in a `secret` row that `api/data.js` does not ser
 |---|---|---|
 | Create | `POST /services/rest/v1/oms/saleOrder/create` | the order appears in the PR channel, and `ucCode` is written back |
 | MRP | `POST /services/rest/v1/catalog/itemType/get` | `maxRetailPrice` is written onto each SKU, so the order is raised at the price Uniware itself holds |
-| Read back | `POST /services/rest/v1/oms/saleorder/get` | `trackingNumber` → AWB, `shippingProvider` → courier, `dispatched` / `delivered` → the dates and the stage |
+| Read back | `POST /services/rest/v1/oms/saleorder/get` | `trackingNumber` → AWB, `shippingProvider` → courier, `dispatched` / `delivered` → the dates and the stage, `trackingStatus` / `courierStatus` → where the parcel is |
 | Log in | `GET /oauth/token` | cached for its full life, refetched once on a 401 |
 
 **Get MRP from Unicommerce** sits on the Product master and in Setup. It reads
@@ -221,6 +221,20 @@ and the access token is cached in a `secret` row that `api/data.js` does not ser
 else. A SKU with no MRP in Uniware, or none at all, is named in the result and falls
 back to the per-unit value in Setup. Without a price the sale order is raised at
 Rs 0.00, which Uniware accepts and then cannot invoice.
+
+### Where the parcel is
+
+The sync also reads the courier's own last scan and shows it beside the stage:
+**Picked up, In transit, Out for delivery, Undelivered, RTO, Delivered, Lost**. Uniware
+does not document these strings and every courier words them differently, so they are
+matched on words and the usual short codes; anything unrecognised leaves the status
+alone and the courier's raw words are kept and shown either way.
+
+The stage stays the thing the two teams act on, and the scan is what the parcel is
+doing. One exception: **RTO** is also a stage, because a box coming back needs
+deciding about. A stage only ever moves forward — a delivery wins over anything, an
+RTO will not undo a delivery, and a delivered, returned or cancelled row is not polled
+again.
 
 An AWB shown on the board links to a tracking page. **Tracking page link** in
 Setup holds the pattern, `https://selloship.com/pages/tracking/{awb}` by default,
