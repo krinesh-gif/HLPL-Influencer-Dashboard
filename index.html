@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>HLPL Collab</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -170,6 +171,16 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .kpi .d{font-size:11.5px;color:var(--ink-3);margin-top:2px}
 .kpi.accent .v{color:var(--rose)}
 .kpi.supply .v{color:var(--teal)}
+
+/* ---------- compact strip (ship queue) ---------- */
+.view-head.tight{margin-bottom:10px;align-items:center}
+.view-head.tight h1{font-size:20px}
+.statline{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline;padding:8px 13px;margin-bottom:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.statline b{font-family:var(--display);font-size:15.5px;font-weight:700;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums;margin-right:5px}
+.statline .s b{color:var(--teal)}
+.statline .c b{color:var(--crit)}
+table.dense th,table.dense td{padding:7px 11px}
+.callout.slim{padding:7px 12px;margin-bottom:10px;font-size:12px}
 
 /* ---------- charts ---------- */
 .qs-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
@@ -988,10 +999,14 @@ const shipTAT = c=>daysBetween(c.requestedAt,c.dispatchDate);
 const pendingAge = c=>["Ready to Ship","Order Created"].includes(c.shipStatus)?daysSince(c.requestedAt):null;
 const agoText = d=>{const n=daysSince(d);
   return n===null?"":n<=0?"today":n===1?"yesterday":n+"d ago";};
-function raisedCell(c){
+function raisedCell(c,age){
+  const shown = typeof age==="number" && age>=0;
   return el("td",{class:"nowrap"},
     el("div",{class:"mono",style:"font-size:12px"},dmy(c.requestedAt)),
-    el("div",{class:"t-sub mono"},hhmm(c.createdTs)||agoText(c.requestedAt)));
+    el("div",{class:"t-sub mono"},(hhmm(c.createdTs)||agoText(c.requestedAt))
+      +(shown?" \u00b7 "+age+"d in queue":"")),
+    shown?el("div",{class:"agebar"},el("i",{style:"width:"+Math.min(100,age*14)
+      +"%;background:"+(age>=4?"var(--crit)":age>=2?"var(--warn)":"var(--teal)")})):null);
 }
 const orderValue = c=>(c.items||[]).reduce((s,i)=>s+num(i.mrp)*num(i.qty),0);
 
@@ -1451,6 +1466,14 @@ async function clearLocal(){
   S.influencers={}; S.collabs={}; S.skus={}; S.settings={...DEFAULT_SETTINGS};
   render(); toast("This browser\u2019s data cleared");
 }
+/* The same numbers as a KPI strip, on one line. Each entry is
+   [label, value, tone] and a null entry is skipped. */
+function statline(items){
+  const bar=el("div",{class:"statline"});
+  (items||[]).filter(Boolean).forEach(it=>bar.appendChild(
+    el("span",{class:it[2]||null},el("b",{},String(it[1])),it[0])));
+  return bar;
+}
 function kpi(k,v,d,cls){ return el("div",{class:"kpi "+(cls||"")},
   el("div",{class:"k"},k),el("div",{class:"v"},v),el("div",{class:"d"},d||"")); }
 
@@ -1460,11 +1483,10 @@ function viewShip(){
   const allReady=collabList().filter(c=>c.shipStatus==="Ready to Ship");
   const ready=allReady.filter(matches);
   const cleanReady=ready.filter(c=>!collabProblems(c).length && !String(c.ucCode||"").trim());
-  wrap.appendChild(el("div",{class:"view-head"},
-    el("div",{},el("h1",{},"Ship queue"),
-      el("p",{},"Everything marketing added is here. One click gives you the whole batch as a single file — Unicommerce, or Selloship when you are shipping direct. Paste the dispatch export back when it ships.")),
+  wrap.appendChild(el("div",{class:"view-head tight"},
+    el("div",{},el("h1",{},"Ship queue")),
     el("div",{class:"head-actions"},
-      Uni.available()?el("button",{class:"btn",disabled:Uni.busy?true:null,
+      Uni.available()?el("button",{class:"btn btn-sm",disabled:Uni.busy?true:null,
         title:"Read the tracking number and courier back off Unicommerce",
         onclick:()=>Uni.sync(true)},Uni.busy?"Working…":"Sync tracking"):null,
       (Uni.available()&&canCreateOrders())?el("button",{class:"btn btn-p",disabled:Uni.busy?true:null,
@@ -1473,42 +1495,45 @@ function viewShip(){
         /* Only the address-clean rows, because those are the ones that will go. */
         "Create in Unicommerce"+(UI.sel.size?" · "+UI.sel.size
           :(cleanReady.length?" · "+cleanReady.length:""))):null,
-      canCreateOrders()?el("button",{class:"btn",onclick:openPasteBack},"Paste courier status"):null,
-      canCreateOrders()?el("button",{class:"btn",onclick:openBulkBuild},"Review first"):null,
-      canCreateOrders()?el("button",{class:"btn btn-s",onclick:downloadAllReady},
-        "Unicommerce"+(UI.sel.size?" · "+UI.sel.size:(ready.length?" · "+ready.length:""))):null,
-      canCreateOrders()?el("button",{class:"btn btn-p",onclick:downloadSelloship},
-        "Selloship"+(UI.sel.size?" · "+UI.sel.size:(ready.length?" · "+ready.length:""))):null,
-      canCreateOrders()?el("button",{class:"btn btn-p",onclick:downloadShipway},
-        "Shipway"+(UI.sel.size?" · "+UI.sel.size:(ready.length?" · "+ready.length:""))):null)));
-  if(!canCreateOrders()) wrap.appendChild(el("div",{class:"callout"},
-    el("b",{},"You are signed in as marketing. "),
-    "These are the shipments you have raised and where they have reached. Creating the courier orders is supply\u2019s step."));
+      canCreateOrders()?el("button",{class:"btn btn-sm",onclick:openPasteBack},"Paste courier status"):null,
+      canCreateOrders()?el("button",{class:"btn btn-sm",onclick:openBulkBuild},"Review first"):null,
+      canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadAllReady,
+        title:"Download the Unicommerce upload file"},"Unicommerce"+countSuffix(ready)):null,
+      canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadSelloship,
+        title:"Download the Selloship upload file"},"Selloship"+countSuffix(ready)):null,
+      canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadShipway,
+        title:"Download the Shipway upload file"},"Shipway"+countSuffix(ready)):null)));
+  if(!canCreateOrders()) wrap.appendChild(el("div",{class:"callout slim"},
+    el("b",{},"Signed in as marketing — "),
+    "what you raised and where it reached. Creating the courier orders is supply\u2019s step."));
 
   /* Newest first, full stop. A row must not jump up or down the queue because
      its stage changed — supply works down from the top, and the stage filter
      above is there for anyone who wants one stage on its own. */
-  const L=collabList().filter(matches).filter(c=>c.shipStatus!=="Cancelled")
+  const all=collabList();
+  const L=all.filter(matches).filter(c=>c.shipStatus!=="Cancelled")
     .sort(byLatestRaised);
   const blocked=allReady.filter(c=>collabProblems(c).length);
-  const tats=collabList().map(shipTAT).filter(v=>v!==null&&v>=0);
+  const tats=all.map(shipTAT).filter(v=>v!==null&&v>=0);
 
-  wrap.appendChild(el("div",{class:"kpis"},
-    kpi("Ready to ship",String(allReady.length),blocked.length?blocked.length+" blocked on address":"All address-clean","supply"),
-    kpi("In UC, not dispatched",String(collabList().filter(c=>c.shipStatus==="Order Created").length),"Orders created, awaiting pickup"),
-    kpi("Out for delivery",
-      String(collabList().filter(c=>c.trackStage==="Out for delivery").length),
-      collabList().filter(c=>c.trackStage==="In transit").length+" still in transit"),
-    kpi("Needs a look",
-      String(collabList().filter(c=>["Undelivered","RTO","Lost"].includes(c.trackStage)
-        ||c.shipStatus==="RTO").length),
-      "Undelivered, coming back or lost","supply"),
-    kpi("Median request→dispatch",tats.length?median(tats)+" d":"—",tats.length+" shipments measured"),
-    kpi("Oldest pending",String(Math.max(0,...collabList().map(c=>pendingAge(c)||0)))+" d","Since marketing raised it")));
+  /* The same six numbers the tiles used to carry, on one line, so the queue
+     itself starts higher up the page. */
+  const look=all.filter(c=>["Undelivered","RTO","Lost"].includes(c.trackStage)
+    ||c.shipStatus==="RTO").length;
+  wrap.appendChild(statline([
+    ["ready to ship",allReady.length,"s"],
+    blocked.length?["blocked on address",blocked.length,"c"]:null,
+    ["in UC, awaiting pickup",all.filter(c=>c.shipStatus==="Order Created").length],
+    ["out for delivery",all.filter(c=>c.trackStage==="Out for delivery").length],
+    ["in transit",all.filter(c=>c.trackStage==="In transit").length],
+    ["need a look",look,look?"c":null],
+    ["median request→dispatch",tats.length?median(tats)+"d":"—"],
+    ["oldest pending",Math.max(0,...all.map(c=>pendingAge(c)||0))+"d"],
+  ]));
 
-  if(blocked.length) wrap.appendChild(el("div",{class:"callout crit"},
+  if(blocked.length) wrap.appendChild(el("div",{class:"callout crit slim"},
     el("b",{},blocked.length+" row"+(blocked.length>1?"s":"")+" cannot go into UC yet — "),
-    "pincode, state or mobile is wrong. Open the row and fix it, or send it back to marketing. UC rejects the whole file for one bad state name."));
+    "pincode, state or mobile is wrong. Open the row and fix it. UC rejects the whole file for one bad state name."));
 
   wrap.appendChild(filterBar({pay:false,raised:true,track:true}));
   if(!L.length){ wrap.appendChild(el("div",{class:"panel"},UI.raised||UI.q||UI.month||UI.status
@@ -1530,10 +1555,9 @@ function viewShip(){
         el("div",{class:"mono",style:"font-size:12px"},[(c.ship||{}).city,(c.ship||{}).state].filter(Boolean).join(", ")||"—"),
         el("div",{class:"t-sub mono"},digits((c.ship||{}).pin)||"no pin"),
         probs.length?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600"},probs[0][1]):null),
-      raisedCell(c),
-      el("td",{},statusPill(c), trackPill(c),
-        age!==null?el("div",{},el("div",{class:"t-sub mono"},age+"d in queue"),
-          el("div",{class:"agebar"},el("i",{style:"width:"+Math.min(100,age*14)+"%;background:"+(age>=4?"var(--crit)":age>=2?"var(--warn)":"var(--teal)")}))):null),
+      raisedCell(c,age),
+      el("td",{},statusPill(c),
+        c.trackStage===c.shipStatus?null:trackPill(c)),
       el("td",{class:"mono"},c.ucCode||"—",
         c.orderVia==="Unicommerce API"?el("div",{class:"t-sub"},"via API"):null,
         c.uniError?el("div",{class:"t-sub",style:"color:var(--crit);font-weight:600;white-space:normal;max-width:220px"},
@@ -1546,7 +1570,7 @@ function viewShip(){
         el("button",{class:"btn btn-sm btn-q",onclick:()=>openCollab(c.id)},"Open"))));
   });
   wrap.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},
-    el("table",{},el("thead",{},el("tr",{},
+    el("table",{class:"dense"},el("thead",{},el("tr",{},
       el("th",{class:"rowsel"},el("input",{type:"checkbox",style:"width:auto","aria-label":"Select all shippable",
         onchange:e=>{UI.sel.clear();
           if(e.target.checked) L.filter(c=>c.shipStatus==="Ready to Ship"&&!collabProblems(c).length).forEach(c=>UI.sel.add(c.id));
@@ -1570,6 +1594,12 @@ function viewShip(){
       canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadAllReady},"Unicommerce"):null));
   }
   return wrap;
+}
+/* " \u00b7 12" after a button label: the selection when there is one, else the
+   whole ready batch, and nothing at all when there is neither. */
+function countSuffix(ready){
+  const n = UI.sel.size || (ready||[]).length;
+  return n ? " \u00b7 "+n : "";
 }
 function median(a){const s=[...a].sort((x,y)=>x-y);const m=s.length>>1;
   return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);}
