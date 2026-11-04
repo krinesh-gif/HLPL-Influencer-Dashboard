@@ -14,7 +14,7 @@ retypes an address, a SKU or a tracking number.
 | Marketing posts address + products in the WhatsApp group | Marketing saves a collab row; address comes from the influencer master |
 | Supply copies it into a UC bulk sheet by hand | Supply ticks the ready rows and downloads the UC file |
 | Supply creates orders in UC one by one | One bulk upload, order codes written back automatically |
-| Dispatch details typed into a shared Excel | Paste the UC dispatch export back in; rows update themselves |
+| Dispatch details typed into a shared Excel | **Sync tracking** reads the AWB, courier and scan straight off Unicommerce |
 | "Can you resend her address?" | The influencer master already has it — hit **Repeat** |
 
 ## Screens
@@ -22,10 +22,11 @@ retypes an address, a SKU or a tracking number.
 - **New shipment** — marketing's page. Paste the address, add the products either by
   pasting a list or searching the catalogue, save. There is no download here on purpose:
   entries pile up through the day and supply takes them as one file the next morning.
-- **Ship queue** — supply's page. Three one-click downloads of the same ready batch:
-  **Unicommerce** (CSV, per item), **Selloship** (xlsx, per parcel) and **Shipway**
-  (CSV, per item). Each saves the file and marks the orders created. *Review first*
-  opens the batch for checking before downloading.
+- **Ship queue** — supply's page. **Create in Unicommerce** raises the orders over the
+  API; the download button next to it offers the same ready batch as a file instead —
+  **Unicommerce** (CSV, per item), **Selloship** (xlsx, per parcel) or **Shipway**
+  (CSV, per item) — and marks the orders created either way. **Sync tracking** brings
+  the AWB, courier and courier scan back.
 - **Collabs** — the register. Locked price, payment state, box contents, shipment stage.
 - **Content** — post date, link, views, reach, likes, comments, shares, saves; ER, CPV and CPE computed.
 - **Influencers** — the master. Address, pincode, mobile, tier, category, full collab history, one-click repeat.

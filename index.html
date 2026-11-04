@@ -182,6 +182,20 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 table.dense th,table.dense td{padding:7px 11px}
 .callout.slim{padding:7px 12px;margin-bottom:10px;font-size:12px}
 
+/* ---------- menu button ---------- */
+.menu{position:relative}
+.menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:50;min-width:238px;text-align:left;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-md);padding:5px}
+.menu.up .menu-pop{top:auto;bottom:calc(100% + 6px)}
+.menu-h{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);padding:6px 9px 4px}
+.menu-i{display:block;width:100%;text-align:left;font:inherit;font-size:13px;font-weight:600;color:var(--ink);
+  background:none;border:0;border-radius:7px;padding:7px 9px;cursor:pointer}
+.menu-i:hover{background:var(--surface-2)}
+.menu-i span{display:block;font-size:11.5px;font-weight:400;color:var(--ink-3);margin-top:1px}
+.ico{width:15px;height:15px;flex:none}
+.caret{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;
+  border-top:5px solid currentColor;opacity:.75;margin-left:1px}
+
 /* ---------- charts ---------- */
 .qs-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
 @media (max-width:900px){.qs-grid{grid-template-columns:1fr}}
@@ -1114,7 +1128,7 @@ function briefText(c){
 </script>
 <script>
 /* ================= UI state + router ================= */
-const UI = { tab:"quick", q:"", month:"", status:"", pay:"", raised:"", track:"", sel:new Set(), anMonth:"" };
+const UI = { tab:"quick", q:"", month:"", status:"", pay:"", raised:"", track:"", sel:new Set(), anMonth:"", menu:"" };
 const TABS = [
   {id:"quick",    label:"New shipment",lane:"lane-s"},
   {id:"collabs",  label:"Collabs",     lane:"lane-m"},
@@ -1156,6 +1170,11 @@ window.addEventListener("hashchange",()=>{
   if(knownTab(t) && t!==UI.tab){ UI.tab=t; UI.sel.clear();
     try{ localStorage.setItem(TAB_KEY,t); }catch(e){} render(); }
 });
+/* An open menu closes on a click anywhere else, or on Escape. The button and
+   the menu itself stop the click, so only the outside ones reach this. */
+const closeMenu=()=>{ if(UI.menu){ UI.menu=""; render(); } };
+document.addEventListener("click",closeMenu);
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeMenu(); });
 
 /* A render throws the whole view away and builds it again, which takes the
    focused field with it \u2014 so typing in the search box lost the caret after
@@ -1247,18 +1266,6 @@ function renderRibbon(){
 /* ================= shared bits ================= */
 function pill(text,tone){ return el("span",{class:"pill "+(tone||"neutral")},text); }
 function statusPill(c){ return pill(c.shipStatus,SHIP_TONE[c.shipStatus]); }
-/* Whether a stage read off a courier is a step forward. A delivery is hard
-   evidence and wins; RTO is terminal but must not pull a delivered row back.
-   The same rule runs server-side in api/uni.js for the Unicommerce sync. */
-function advanceStage(current,want){
-  if(!want||want===current) return "";
-  if(want==="Delivered") return "Delivered";
-  if(current==="Delivered") return "";
-  if(want==="RTO") return "RTO";
-  if(current==="RTO") return "";
-  const a=SHIP_FLOW.indexOf(current), b=SHIP_FLOW.indexOf(want);
-  return b>a ? want : "";
-}
 /* The courier's own words under the pill, when they say more than the pill. */
 function trackPill(c){
   const st=(c||{}).trackStage;
@@ -1268,6 +1275,41 @@ function trackPill(c){
   return el("div",{style:"margin-top:3px"},
     pill(st,TRACK_TONE[st]||"neutral"),
     extra?el("div",{class:"t-sub",style:"white-space:normal;max-width:170px"},raw):null);
+}
+/* The same batch goes out in three shapes. Three buttons side by side said
+   three jobs; it is one job with a choice of file, so: one button, one menu.
+   The open menu is state, not DOM, so a background refresh cannot shut it. */
+function iconDownload(){
+  const s=sv("svg",{viewBox:"0 0 16 16",class:"ico","aria-hidden":"true",fill:"none",
+    stroke:"currentColor","stroke-width":"1.7","stroke-linecap":"round","stroke-linejoin":"round"});
+  s.appendChild(sv("path",{d:"M8 1.7v8.1"}));
+  s.appendChild(sv("path",{d:"M4.7 6.6 8 9.9l3.3-3.3"}));
+  s.appendChild(sv("path",{d:"M2.5 11.5v1.3a1.4 1.4 0 0 0 1.4 1.4h8.2a1.4 1.4 0 0 0 1.4-1.4v-1.3"}));
+  return s;
+}
+const DOWNLOADS = [
+  ["Unicommerce","CSV \u00b7 one row per item",    ()=>downloadAllReady()],
+  ["Selloship",  "XLSX \u00b7 one row per parcel", ()=>downloadSelloship()],
+  ["Shipway",    "CSV \u00b7 one row per item",    ()=>downloadShipway()],
+];
+function downloadMenu(ready,opts){
+  opts=opts||{};
+  /* Two of these can be on screen at once \u2014 the header and the selection
+     bar \u2014 so each knows itself by name and only one is ever open. */
+  const id=opts.id||"dl";
+  const n=UI.sel.size||(ready||[]).length, open=UI.menu===id;
+  const wrap=el("div",{class:"menu"+(opts.up?" up":"")});
+  wrap.appendChild(el("button",{class:"btn btn-sm btn-s"+(opts.cls?" "+opts.cls:""),
+    title:"Download this batch as a courier file","aria-haspopup":"menu",
+    "aria-expanded":open?"true":"false",
+    onclick:e=>{ e.stopPropagation(); UI.menu=open?"":id; render(); }},
+    iconDownload(), n?String(n):"Download", el("span",{class:"caret"})));
+  if(open) wrap.appendChild(el("div",{class:"menu-pop",role:"menu",
+      onclick:e=>e.stopPropagation()},
+    el("div",{class:"menu-h"},n?"Download "+n+" order"+(n===1?"":"s")+" as":"Download as"),
+    ...DOWNLOADS.map(([name,what,run])=>el("button",{class:"menu-i",role:"menuitem",
+      onclick:()=>{ UI.menu=""; render(); run(); }},name,el("span",{},what)))));
+  return wrap;
 }
 function personCell(c){
   const inf=infOf(c)||{};
@@ -1535,14 +1577,7 @@ function viewShip(){
         /* Only the address-clean rows, because those are the ones that will go. */
         "Create in Unicommerce"+(UI.sel.size?" · "+UI.sel.size
           :(cleanReady.length?" · "+cleanReady.length:""))):null,
-      canCreateOrders()?el("button",{class:"btn btn-sm",onclick:openPasteBack},"Paste courier status"):null,
-      canCreateOrders()?el("button",{class:"btn btn-sm",onclick:openBulkBuild},"Review first"):null,
-      canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadAllReady,
-        title:"Download the Unicommerce upload file"},"Unicommerce"+countSuffix(ready)):null,
-      canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadSelloship,
-        title:"Download the Selloship upload file"},"Selloship"+countSuffix(ready)):null,
-      canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadShipway,
-        title:"Download the Shipway upload file"},"Shipway"+countSuffix(ready)):null)));
+      canCreateOrders()?downloadMenu(ready,{id:"dl-head"}):null)));
   if(!canCreateOrders()) wrap.appendChild(el("div",{class:"callout slim"},
     el("b",{},"Signed in as marketing — "),
     "what you raised and where it reached. Creating the courier orders is supply\u2019s step."));
@@ -1629,17 +1664,9 @@ function viewShip(){
       canCreateOrders()?el("button",{class:"btn btn-sm",
         title:"Put these back with supply as if they had never been created",
         onclick:bulkReopen},"Send back to Ready to Ship"):null,
-      canCreateOrders()?el("button",{class:"btn btn-sm",onclick:downloadShipway},"Shipway"):null,
-      canCreateOrders()?el("button",{class:"btn btn-sm",onclick:downloadSelloship},"Selloship"):null,
-      canCreateOrders()?el("button",{class:"btn btn-sm btn-s",onclick:downloadAllReady},"Unicommerce"):null));
+      canCreateOrders()?downloadMenu(null,{id:"dl-sel",up:true}):null));
   }
   return wrap;
-}
-/* " \u00b7 12" after a button label: the selection when there is one, else the
-   whole ready batch, and nothing at all when there is neither. */
-function countSuffix(ready){
-  const n = UI.sel.size || (ready||[]).length;
-  return n ? " \u00b7 "+n : "";
 }
 function median(a){const s=[...a].sort((x,y)=>x-y);const m=s.length>>1;
   return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);}
@@ -3803,12 +3830,7 @@ function selloshipCsv(rows){
 }
 async function downloadSelloship(){
   if(!canCreateOrders()){ toast("Only the supply team creates orders",true); return; }
-  const chosen=downloadScope();
-  const clean=chosen.filter(c=>!collabProblems(c).length);
-  if(!clean.length){ openBulkBuild(); return; }
-  if(clean.length!==chosen.length &&
-     !confirm((chosen.length-clean.length)+" order(s) have an address or SKU problem and will be left out.\n\nContinue with the "+clean.length+" that are clean?")) return;
-
+  const clean=readyBatch(); if(!clean) return;
   const {rows,assigned}=buildSelloship(clean);
   const name="selloship-orders-"+todayISO();
   let ok=false;
@@ -3926,13 +3948,9 @@ function buildShipway(collabs){
 }
 async function downloadShipway(){
   if(!canCreateOrders()){ toast("Only the supply team creates orders",true); return; }
-  const chosen=downloadScope();
-  const clean=chosen.filter(c=>!collabProblems(c).length);
-  if(!clean.length){ openBulkBuild(); return; }
+  const clean=readyBatch(); if(!clean) return;
   const noEmail=clean.filter(c=>!((c.ship||{}).email||S.settings.fallbackEmail));
   if(noEmail.length && !confirm(noEmail.length+" order(s) have no email address, and Shipway marks that column mandatory.\n\nSet a fallback email under Setup, or continue anyway?")) return;
-  if(clean.length!==chosen.length &&
-     !confirm((chosen.length-clean.length)+" order(s) have an address or SKU problem and will be left out.\n\nContinue with the "+clean.length+" that are clean?")) return;
   const {csv,assigned}=buildShipway(clean);
   if(!await saveFile("shipway-orders-"+todayISO()+".csv",csv)) return;
   const again=clean.filter(c=>c.ucCode).length;
@@ -3961,260 +3979,35 @@ async function markCreated(assigned, via){
   }
   UI.sel.clear();
 }
-async function downloadAllReady(){
-  if(!canCreateOrders()){ toast("Only the supply team creates orders",true); return; }
+/* What the three downloads share: there has to be something to send, and
+   nothing may be dropped from the batch without supply saying so. */
+function readyBatch(){
   const chosen=downloadScope();
   const clean=chosen.filter(c=>!collabProblems(c).length);
-  if(!String(S.settings.shipMethod||"").trim() || !clean.length || clean.length!==chosen.length){
-    openBulkBuild(); return;   // something needs a look — show the review panel instead
+  if(!clean.length){
+    toast(chosen.length
+      ? "Every row in this batch still has an address or SKU problem \u2014 fix those first"
+      : "Nothing is sitting at Ready to Ship", true);
+    return null;
   }
+  if(clean.length!==chosen.length &&
+     !confirm((chosen.length-clean.length)+" order(s) have an address or SKU problem and will be left out."
+       +"\n\nContinue with the "+clean.length+" that are clean?")) return null;
+  return clean;
+}
+async function downloadAllReady(){
+  if(!canCreateOrders()){ toast("Only the supply team creates orders",true); return; }
+  if(!String(S.settings.shipMethod||"").trim()){
+    toast("Set the shipping method code under Setup \u2014 UC rejects the file without it",true);
+    go("setup"); return;
+  }
+  const clean=readyBatch(); if(!clean) return;
   const {csv,assigned}=buildUCFile(clean);
   if(!await saveFile("uc-bulk-orders-"+todayISO()+".csv",csv)) return;
   const again=clean.filter(c=>c.ucCode).length;
   await markCreated(assigned,"Unicommerce");
   toast(clean.length+" orders downloaded"+(again?" ("+again+" re-downloaded)":" and marked as created in UC"));
 }
-function openBulkBuild(){
-  const chosen = downloadScope();
-  const clean = chosen.filter(c=>!collabProblems(c).length);
-  const blocked = chosen.filter(c=>collabProblems(c).length);
-  const api=drawer("Unicommerce bulk file","One row per item · "+(S.settings.ucColumns||[]).length+" columns",()=>{});
-
-  if(!clean.length){
-    api.body.appendChild(el("div",{class:"callout crit"},el("b",{},"Nothing is ready to upload. "),
-      chosen.length?"Every selected row still has an address or SKU problem.":"Move rows to “Ready to ship” first."));
-    blocked.forEach(c=>api.body.appendChild(el("div",{class:"panel",style:"margin-bottom:8px"},
-      el("div",{class:"panel-b"},el("b",{},(c.ship||{}).name||"—"),
-        el("ul",{style:"margin:6px 0 0 18px;color:var(--crit);font-size:12.5px"},
-          ...collabProblems(c).map(p=>el("li",{},p[1])))))));
-    api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
-    return;
-  }
-
-  if(!String(S.settings.shipMethod||"").trim()){
-    api.body.appendChild(el("div",{class:"callout crit"},el("b",{},"Shipping Method is blank. "),
-      "UC rejects the file without it. Set it once under Setup \u2014 it is one of the five mandatory columns."));
-    api.foot.appendChild(el("button",{class:"btn btn-p",onclick:()=>{api.close();go("setup");}},"Open Setup"));
-    api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Close"));
-    return;
-  }
-  const {csv,assigned}=buildUCFile(clean);
-  const lines = clean.reduce((s,c)=>s+(c.items||[]).length,0);
-  api.body.appendChild(el("div",{class:"callout"},
-    el("b",{},clean.length+" orders · "+lines+" item rows across "+(S.settings.ucColumns||[]).length+" columns. "),
-    "Built to match your last working upload: channel ",el("b",{},S.settings.channel),
-    ", shipping method ",el("b",{},S.settings.shipMethod),
-    ", item code = SKU code, quantity blank when it is 1. Upload it in Unicommerce → Orders → Import. The order codes below are written back here, so the tracking you paste later matches."));
-  if(blocked.length) api.body.appendChild(el("div",{class:"callout crit"},
-    el("b",{},blocked.length+" row"+(blocked.length>1?"s":"")+" left out — "),"address or SKU incomplete. Fix them and build again."));
-
-  const tb=el("tbody",{});
-  assigned.forEach(({collab:c,code,reused})=>{
-    tb.appendChild(el("tr",{},
-      el("td",{class:"mono"},code,reused?el("span",{class:"tag",style:"margin-left:6px"},"existing"):null),
-      el("td",{},(c.ship||{}).name,el("div",{class:"t-sub mono"},(c.ship||{}).city+" · "+digits((c.ship||{}).pin))),
-      el("td",{class:"mono"},(c.items||[]).map(i=>i.sku+"×"+i.qty).join(", ")),
-      el("td",{},el("span",{class:"tag "+(c.box==="PR Box"?"pr":"")},c.box))));
-  });
-  api.body.appendChild(el("div",{class:"panel",style:"margin-bottom:14px"},el("div",{class:"tw"},el("table",{},
-    el("thead",{},el("tr",{},el("th",{},"Order code"),el("th",{},"Ship to"),el("th",{},"Items"),el("th",{},"Box"))),tb))));
-
-  api.body.appendChild(field("File preview",el("textarea",{rows:8,readonly:true,"aria-label":"CSV preview"},
-    csv.replace(/^﻿/,"").split("\r\n").slice(0,6).join("\n")+(lines>5?"\n… "+lines+" item rows in total":"")),
-    {hint:"Saved as UTF-8 with a byte-order mark and CRLF line endings, which is what Excel and UC both expect."}));
-
-  const applyCodes=async()=>{
-    for(const {collab:c,code} of assigned)
-      await Store.put("collabs",{...S.collabs[c.id],ucCode:code,shipStatus:"Order Created"});
-    UI.sel.clear();
-  };
-  api.foot.appendChild(el("button",{class:"btn btn-s",onclick:async()=>{
-    const ok=await saveFile("uc-bulk-orders-"+todayISO()+".csv",csv);
-    if(ok){ await applyCodes(); api.close(); toast(clean.length+" orders moved to “Order created”"); }
-  }},"Download & mark as created in UC"));
-  api.foot.appendChild(el("button",{class:"btn",onclick:()=>copyText(csv.replace(/^﻿/,""))},"Copy file text"));
-  api.foot.appendChild(el("span",{style:"flex:1"}));
-  api.foot.appendChild(el("button",{class:"btn btn-q btn-sm",onclick:api.close},"Cancel"));
-}
-
-/* A courier or OMS export pasted back: Shipway, Unicommerce, Selloship. The
-   columns differ between all three, so a header row is read by name, and only
-   a file without one falls back to the old fixed order. */
-function parseDelimited(text){
-  const body=String(text||"").replace(/^﻿/,"");
-  const first=(body.split(/\r?\n/)[0]||"");
-  const sep=(first.split("\t").length-1)>(first.split(",").length-1)?"\t":",";
-  const rows=[]; let row=[], cell="", quoted=false;
-  for(let i=0;i<body.length;i++){
-    const ch=body[i];
-    if(quoted){
-      if(ch==='"'){ if(body[i+1]==='"'){ cell+='"'; i++; } else quoted=false; }
-      else cell+=ch;
-    }
-    else if(ch==='"') quoted=true;
-    else if(ch===sep){ row.push(cell); cell=""; }
-    else if(ch==="\n"){ row.push(cell); rows.push(row); row=[]; cell=""; }
-    else if(ch!=="\r") cell+=ch;
-  }
-  if(cell||row.length){ row.push(cell); rows.push(row); }
-  return rows.map(r=>r.map(x=>x.trim())).filter(r=>r.some(Boolean));
-}
-const PB_COLUMNS=[
-  ["code",        /^\*?\s*(sale\s*)?order\s*(id|code|no\.?|number)?$|^\*?\s*(display\s*)?order\s*code$/i],
-  ["awb",         /awb|waybill|tracking\s*(no|number|id)/i],
-  ["status",      /shipment\s*status|^\*?\s*(order\s*|current\s*|delivery\s*)?status$/i],
-  ["courier",     /courier|carrier|shipping\s*provider|logistic/i],
-  ["dispatchDate",/dispatch|shipped\s*(on|date)|manifest/i],
-  ["deliveryDate",/deliver(y|ed)\s*(on|date|at)/i],
-];
-function pbHeaderMap(cells){
-  const map={};
-  cells.forEach((h,i)=>{
-    const name=String(h||"").replace(/^\*+|\*+$/g,"").trim();
-    if(!name) return;
-    for(const [field,re] of PB_COLUMNS)
-      if(map[field]===undefined && re.test(name)){ map[field]=i; return; }
-  });
-  return map;
-}
-/* Courier words vary by aggregator; anything not listed is left alone rather
-   than guessed at, because a wrong stage is worse than no stage. */
-function pbStage(raw){
-  const v=String(raw||"").toUpperCase().replace(/[^A-Z]+/g," ").trim();
-  if(!v) return "";
-  if(/\bDELIVERED\b/.test(v)) return "Delivered";
-  if(/\bCANCEL/.test(v)) return "Cancelled";
-  if(/\bRTO\b|RETURN TO ORIGIN|RETURNED TO ORIGIN/.test(v)) return "RTO";
-  if(/\b(IN TRANSIT|INTRANSIT|TRANSIT|SHIPPED|DISPATCHED|OUT FOR DELIVERY|PICKED UP|PICKUP DONE|SHIPMENT PICKED)\b/.test(v))
-    return "Dispatched";
-  if(/\b(PENDING|MANIFESTED|NOT PICKED|READY TO SHIP|LABEL GENERATED)\b/.test(v)) return "Order Created";
-  return "";
-}
-function openPasteBack(){
-  let txt="", parsed=[], statusOnly=true, note="";
-  const api=drawer("Paste courier details back",
-    "A Shipway, Unicommerce or Selloship export. Keep the header row — the columns are read by name.",()=>{});
-  const preview=el("div",{});
-
-  const parse=()=>{
-    parsed=[]; note="";
-    const rows=parseDelimited(txt);
-    if(!rows.length){ draw(); return; }
-    const map=pbHeaderMap(rows[0]);
-    const headed = map.code!==undefined && (map.awb!==undefined || map.status!==undefined);
-    const data = headed ? rows.slice(1) : rows;
-    if(!headed) note="No header row recognised, so columns are read in the old order: "
-      +"order code, AWB, courier, dispatch date.";
-    const seen=new Map();
-    data.forEach(p=>{
-      const at=f=>headed&&map[f]!==undefined?(p[map[f]]||""):"";
-      const code=(headed?at("code"):p[0]||"").trim();
-      if(!code || /sale\s*order|order\s*code|order\s*id/i.test(code)) return;
-      const awb     = headed?at("awb").trim()     : (p[1]||"").trim();
-      const courier = headed?at("courier").trim() : (p[2]||"").trim();
-      const rawStat = headed?at("status").trim()   : "";
-      const dates   = headed ? [at("deliveryDate"),at("dispatchDate")].map(normDate)
-                             : [ "", normDate(p.find(x=>/^\d{2}[\/\-]\d{2}[\/\-]\d{2,4}/.test(x)||/^\d{4}-\d{2}-\d{2}/.test(x))) ];
-      /* One row per item in every one of these exports, so an order repeats. */
-      const key=code.toLowerCase();
-      if(seen.has(key)){
-        const prev=seen.get(key);
-        if(!prev.awb && awb) prev.awb=awb;
-        return;
-      }
-      const c=collabList().find(x=>(x.ucCode||"").toLowerCase()===key)
-           || collabList().find(x=>(x.awb||"").toLowerCase()===key);
-      const row={code,awb,courier,rawStat,stage:pbStage(rawStat),
-        deliveryDate:dates[0],dispatchDate:dates[1],collab:c||null};
-      seen.set(key,row); parsed.push(row);
-    });
-    draw();
-  };
-
-  const draw=()=>{
-    preview.innerHTML="";
-    if(!parsed.length){ preview.appendChild(el("div",{class:"hint"},"Nothing read yet.")); return; }
-    if(note) preview.appendChild(el("div",{class:"callout"},note));
-    const matched=parsed.filter(r=>r.collab);
-    const unknownStage=matched.filter(r=>r.rawStat&&!r.stage);
-    preview.appendChild(el("div",{class:"callout"+(matched.length?"":" crit")},
-      el("b",{},matched.length+" of "+parsed.length+" orders matched this board. "),
-      parsed.length-matched.length
-        ? (parsed.length-matched.length)+" are not collab orders and are ignored — a full courier "
-          +"export carries every channel, and nothing outside this board is read or stored."
-        : ""));
-    if(unknownStage.length) preview.appendChild(el("div",{class:"callout crit"},
-      el("b",{},unknownStage.length+" matched row"+(unknownStage.length>1?"s":"")+" had a status I do not map: "),
-      [...new Set(unknownStage.map(r=>r.rawStat))].join(", ")+
-      ". Those keep the stage they already have — set them by hand."));
-    preview.appendChild(el("label",{class:"f",style:"margin:4px 0 10px"},
-      el("span",{style:"display:flex;gap:8px;align-items:center"},
-        el("input",{type:"checkbox",style:"width:auto",checked:statusOnly?true:null,
-          onchange:e=>{statusOnly=e.target.checked;draw();}}),
-        el("span",{},"Stage only — leave AWB, courier and dates as they are")),
-      el("div",{class:"hint"},statusOnly
-        ? "Nothing but the shipment stage is written."
-        : "The AWB, courier and any dates in the file are written too, where the row has none.")));
-    const tb=el("tbody",{});
-    matched.forEach(r=>{
-      const now=r.collab.shipStatus;
-      const fwd=!!r.stage && !advanceStage(now,r.stage);
-      tb.appendChild(el("tr",{},
-        el("td",{class:"mono"},r.code),
-        el("td",{},(r.collab.ship||{}).name||"—"),
-        el("td",{},now),
-        el("td",{},r.stage
-          ? (fwd?el("span",{class:"t-sub"},"stays "+now+" (already further on)"):el("b",{},r.stage))
-          : el("span",{class:"t-sub"},r.rawStat?"unmapped":"no status column")),
-        el("td",{class:"mono"},statusOnly?el("span",{class:"t-sub"},"—"):(r.awb||"—"))));
-    });
-    preview.appendChild(el("div",{class:"panel"},el("div",{class:"tw"},el("table",{},
-      el("thead",{},el("tr",{},el("th",{},"Order code"),el("th",{},"Influencer"),
-        el("th",{},"Stage now"),el("th",{},"Becomes"),el("th",{},"AWB"))),tb))));
-  };
-
-  api.body.appendChild(el("div",{class:"callout"},
-    "Paste the file whole, header row and all. A Shipway delivered export, a Unicommerce dispatch "
-    +"export and a Selloship sheet all work — the order code, AWB and status columns are found by name. "
-    +"Rows that match no order on this board are ignored."));
-  api.body.appendChild(field("Paste the export",el("textarea",{rows:9,
-    placeholder:'"*Order ID",AWB,"Shipment Status",*SKU,…\nPR700,31738417627152,DELIVERED,…',
-    oninput:e=>{txt=e.target.value;parse();}})));
-  api.body.appendChild(preview); parse();
-
-  api.foot.appendChild(el("button",{class:"btn btn-s",onclick:async()=>{
-    const rows=parsed.filter(r=>r.collab);
-    if(!rows.length){ toast("No order code in that file matches this board",true); return; }
-    let changed=0;
-    for(const r of rows){
-      const c=S.collabs[r.collab.id]; if(!c) continue;
-      const patch={...c};
-      /* Only ever forwards: a row already Delivered is not pulled back. */
-      const next=advanceStage(c.shipStatus,r.stage);
-      if(next) patch.shipStatus=next;
-      if(!statusOnly){
-        if(r.awb && !c.awb) patch.awb=r.awb;
-        if(r.courier && !c.courier) patch.courier=r.courier;
-        if(r.dispatchDate && !c.dispatchDate) patch.dispatchDate=r.dispatchDate;
-        if(r.deliveryDate && !c.deliveryDate) patch.deliveryDate=r.deliveryDate;
-      }
-      if(JSON.stringify(patch)===JSON.stringify(c)) continue;
-      await Store.put("collabs",patch); changed++;
-    }
-    api.close();
-    toast(changed?changed+" order"+(changed===1?"":"s")+" updated":"Nothing needed changing");
-  }},"Apply"));
-  api.foot.appendChild(el("button",{class:"btn",onclick:api.close},"Cancel"));
-}
-function normDate(s){
-  if(!s) return "";
-  s=String(s).trim();
-  let m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return m[0];
-  m=/^(\d{2})[\/\-](\d{2})[\/\-](\d{2,4})/.exec(s);
-  if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; return y+"-"+m[2]+"-"+m[1]; }
-  return "";
-}
-
 /* ================= boot ================= */
 (async function boot(){
   $("#view").appendChild(el("div",{class:"empty"},el("h4",{},"Loading the board…"),
