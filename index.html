@@ -1157,13 +1157,51 @@ window.addEventListener("hashchange",()=>{
     try{ localStorage.setItem(TAB_KEY,t); }catch(e){} render(); }
 });
 
+/* A render throws the whole view away and builds it again, which takes the
+   focused field with it \u2014 so typing in the search box lost the caret after
+   every letter, and so did anyone typing while the 7-second refresh landed.
+   Note where the caret was, put it back afterwards. A field carries
+   data-keep when it has a name worth matching on; otherwise its position
+   among the view\u2019s own controls is enough. */
+function focusSnapshot(){
+  const a=document.activeElement, v=$("#view");
+  if(!a||!v||!v.contains(a)) return null;
+  if(!/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return null;
+  const s={ key:(a.dataset&&a.dataset.keep)||"", tag:a.tagName, type:a.type||"",
+            idx:[...v.querySelectorAll("input,select,textarea")].indexOf(a) };
+  try{ s.start=a.selectionStart; s.end=a.selectionEnd; }catch(e){}
+  return s;
+}
+function focusRestore(s){
+  const v=$("#view");
+  if(!s||!v) return;
+  let n = s.key ? v.querySelector('[data-keep="'+s.key+'"]') : null;
+  if(!n && s.idx>=0){
+    const c=[...v.querySelectorAll("input,select,textarea")][s.idx];
+    if(c && c.tagName===s.tag && (c.type||"")===s.type) n=c;
+  }
+  if(!n) return;
+  try{ n.focus({preventScroll:true}); }catch(e){ return; }
+  if(s.start!==null && s.start!==undefined && typeof n.setSelectionRange==="function"){
+    try{ n.setSelectionRange(s.start,s.end); }catch(e){}
+  }
+}
+/* Typing is one keystroke at a time; rebuilding the table for each one is
+   work nobody sees. Collect them and draw once. */
+let _renderSoon=null;
+function renderSoon(ms){
+  clearTimeout(_renderSoon);
+  _renderSoon=setTimeout(()=>{ _renderSoon=null; render(); }, ms||140);
+}
 function render(){
   if(!Store.ready) return;
+  clearTimeout(_renderSoon); _renderSoon=null;
   const v=$("#view");
   if(Store.mode==="locked"){
     $("#tabs").innerHTML=""; $("#ribbon").innerHTML="";
     v.innerHTML=""; v.appendChild(lockScreen()); return;
   }
+  const keep=focusSnapshot();
   renderTabs(); renderRibbon();
   v.innerHTML="";
   if(Store.mode==="local") v.appendChild(localBanner());
@@ -1171,6 +1209,7 @@ function render(){
             screening:viewScreening,products:viewProducts,analytics:viewAnalytics,
             setup:viewSetup}[UI.tab]||viewCollabs;
   v.appendChild(fn());
+  focusRestore(keep);
 }
 function renderTabs(){
   const n=$("#tabs"); n.innerHTML="";
@@ -1256,33 +1295,34 @@ const raisedKey = c=>c.createdTs||c.requestedAt||"";
 const byLatestRaised = (a,b)=>raisedKey(b).localeCompare(raisedKey(a));
 function filterBar(opts){
   const bar=el("div",{class:"filters"});
-  bar.appendChild(el("input",{class:"search",type:"search",placeholder:opts.placeholder||"Search name, handle, SKU, AWB, order code…",
-    value:UI.q,oninput:e=>{UI.q=e.target.value;render();}}));
+  bar.appendChild(el("input",{class:"search",type:"search","data-keep":"flt-q",
+    placeholder:opts.placeholder||"Search name, handle, SKU, AWB, order code…",
+    value:UI.q,oninput:e=>{UI.q=e.target.value;renderSoon();}}));
   if(opts.month!==false){
     const months=[...new Set(collabList().map(c=>c.month).filter(Boolean))].sort().reverse();
-    const sel=el("select",{onchange:e=>{UI.month=e.target.value;render();}},
+    const sel=el("select",{"data-keep":"flt-month",onchange:e=>{UI.month=e.target.value;render();}},
       el("option",{value:""},"All months"),...months.map(m=>el("option",{value:m,selected:UI.month===m?true:null},monthLabel(m))));
     bar.appendChild(sel);
   }
   if(opts.status!==false){
-    bar.appendChild(el("select",{onchange:e=>{UI.status=e.target.value;render();}},
+    bar.appendChild(el("select",{"data-keep":"flt-status",onchange:e=>{UI.status=e.target.value;render();}},
       el("option",{value:""},"All shipment states"),
       ...SHIP_ALL.map(s=>el("option",{value:s,selected:UI.status===s?true:null},s))));
   }
   if(opts.track){
-    bar.appendChild(el("select",{title:"Where the courier last scanned it",
+    bar.appendChild(el("select",{title:"Where the courier last scanned it","data-keep":"flt-track",
       onchange:e=>{UI.track=e.target.value;UI.sel.clear();render();}},
       el("option",{value:""},"Anywhere with the courier"),
       ...TRACK_STAGES.map(t=>el("option",{value:t,selected:UI.track===t?true:null},t))));
   }
   if(opts.raised){
-    bar.appendChild(el("select",{title:"Show only what was raised recently",
+    bar.appendChild(el("select",{title:"Show only what was raised recently","data-keep":"flt-raised",
       onchange:e=>{UI.raised=e.target.value;UI.sel.clear();render();}},
       el("option",{value:""},"Raised any time"),
       ...RAISED_WINDOWS.map(w=>el("option",{value:w.v,selected:UI.raised===w.v?true:null},w.label))));
   }
   if(opts.pay){
-    bar.appendChild(el("select",{onchange:e=>{UI.pay=e.target.value;render();}},
+    bar.appendChild(el("select",{"data-keep":"flt-pay",onchange:e=>{UI.pay=e.target.value;render();}},
       el("option",{value:""},"All payment states"),
       ...PAY_STATES.map(s=>el("option",{value:s,selected:UI.pay===s?true:null},s))));
   }
@@ -1710,8 +1750,9 @@ function viewPeople(){
   const list=Object.values(S.influencers).filter(i=>!q||[i.name,i.handle,i.city,i.state,i.pin,i.phone,i.category].join(" ").toLowerCase().includes(q))
     .sort((a,b)=>String(a.name).localeCompare(String(b.name)));
   wrap.appendChild(el("div",{class:"filters"},
-    el("input",{class:"search",type:"search",placeholder:"Search name, handle, city, pincode, mobile…",value:UI.q,
-      oninput:e=>{UI.q=e.target.value;render();}})));
+    el("input",{class:"search",type:"search","data-keep":"flt-q",
+      placeholder:"Search name, handle, city, pincode, mobile…",value:UI.q,
+      oninput:e=>{UI.q=e.target.value;renderSoon();}})));
 
   if(!list.length){ wrap.appendChild(el("div",{class:"panel"},emptyState("No influencers saved yet",
     "Add one here, or it gets created automatically the first time you lock a collab."))); return wrap; }
@@ -1771,8 +1812,9 @@ function viewProducts(){
   const list=list0.filter(x=>!q||[x.code,x.name,x.hsn,x.ean].join(" ").toLowerCase().includes(q))
     .sort((a,b)=>String(a.name||a.code).localeCompare(String(b.name||b.code)));
   wrap.appendChild(el("div",{class:"filters"},
-    el("input",{class:"search",type:"search",placeholder:"Search SKU code, product, HSN or EAN\u2026",value:UI.q,
-      oninput:e=>{UI.q=e.target.value;render();}}),
+    el("input",{class:"search",type:"search","data-keep":"flt-q",
+      placeholder:"Search SKU code, product, HSN or EAN\u2026",value:UI.q,
+      oninput:e=>{UI.q=e.target.value;renderSoon();}}),
     el("span",{class:"hint"},list.length+" of "+list0.length+" shown")));
 
   const tb=el("tbody",{});
